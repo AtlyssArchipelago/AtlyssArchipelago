@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36804.6 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AtlyssArchipelagoPlugin.cs", "AtlyssArchipelagoPlugin.cs.csproj", "{80BFEA1C-AE53-460F-BBC2-09BB8D627051}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{80BFEA1C-AE53-460F-BBC2-09BB8D627051}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{80BFEA1C-AE53-460F-BBC2-09BB8D627051}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{80BFEA1C-AE53-460F-BBC2-09BB8D627051}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{80BFEA1C-AE53-460F-BBC2-09BB8D627051}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7D51A19B-6663-42D7-AF3C-859BB257B343}
+	EndGlobalSection
+EndGlobal
