@@ -800,7 +800,7 @@ namespace AtlyssArchipelagoWIP
 
                 SendAPChatMessage(
                     $"Received <color=yellow>{itemName}</color> " +
-                    $"from <color=cyan>{fromPlayerName}</color>!"
+                    $"from <color=#00FFFF>{fromPlayerName}</color>!"
                 );
                 HandleReceivedItem(itemName);
             }
