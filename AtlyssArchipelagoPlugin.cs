@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Archipelago.MultiClient.Net;
 using Archipelago.MultiClient.Net.Enums;
 using Archipelago.MultiClient.Net.Helpers;
@@ -8,8 +6,11 @@ using Archipelago.MultiClient.Net.Packets;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
-using UnityEngine;
 using HarmonyLib;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using UnityEngine;
 namespace AtlyssArchipelagoWIP
 {
     [BepInPlugin("com.azrael.atlyss.ap", "Atlyss Archipelago", "1.3.1")]
@@ -21,6 +22,8 @@ namespace AtlyssArchipelagoWIP
         private static Harmony _harmony;
         private static GameObject scriptHolder;
         private static PortalUnlocks portalLocker;
+
+        private static readonly FieldInfo maxOnscreenMessages = AccessTools.Field(typeof(ChatBehaviour), "_maxGameLogicLines");
 
         private ConfigEntry<string> cfgServer;
         private ConfigEntry<int> cfgPort;
@@ -1027,6 +1030,7 @@ namespace AtlyssArchipelagoWIP
                 Player localPlayer = Player._mainPlayer;
                 if (localPlayer == null) return;
                 ChatBehaviour chat = localPlayer._chatBehaviour;
+                maxOnscreenMessages.SetValue(chat, 50); // increase the max amount of text shown onscreen
                 if (chat == null) return;
 
                 chat.Init_GameLogicMessage(
