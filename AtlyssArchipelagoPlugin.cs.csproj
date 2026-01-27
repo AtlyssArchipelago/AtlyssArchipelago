@@ -318,6 +318,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AtlyssArchipelagoPlugin.cs" />
+    <Compile Include="PortalUnlocks.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\" />

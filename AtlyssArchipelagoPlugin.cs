@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Archipelago.MultiClient.Net;
 using Archipelago.MultiClient.Net.Enums;
 using Archipelago.MultiClient.Net.Helpers;
@@ -20,6 +19,8 @@ namespace AtlyssArchipelagoWIP
         public static AtlyssArchipelagoPlugin Instance { get; private set; }
         public static ManualLogSource StaticLogger { get; private set; }
         private static Harmony _harmony;
+        private static GameObject scriptHolder;
+        private static PortalUnlocks portalLocker;
 
         private ConfigEntry<string> cfgServer;
         private ConfigEntry<int> cfgPort;
@@ -28,15 +29,15 @@ namespace AtlyssArchipelagoWIP
         private ConfigEntry<bool> cfgAutoConnect;
 
         private ArchipelagoSession _session;
-        private bool connected;
+        public bool connected;
         private bool connecting;
 
         private int goalOption = 3;
-        private int areaAccessOption = 0;
+        public int areaAccessOption = 0;
         private bool shopSanityEnabled = false;
 
-        private bool _catacombsPortalReceived = false;
-        private bool _grovePortalReceived = false;
+        public bool _catacombsPortalReceived = false;
+        public bool _grovePortalReceived = false;
         private readonly HashSet<long> _reportedChecks = new HashSet<long>();
 
         private int _lastLevel = 0;
@@ -395,6 +396,10 @@ namespace AtlyssArchipelagoWIP
             Logger.LogInfo("[AtlyssAP] Press F5 to connect to Archipelago");
 
             _harmony = new Harmony("com.azrael.atlyss.ap.harmony");
+
+            scriptHolder = new GameObject("Archipelago Script Holder"); // create a scriptholder for Archipelago helper scripts
+            DontDestroyOnLoad(scriptHolder);
+            portalLocker = scriptHolder.AddComponent<PortalUnlocks>();
             try
             {
                 _harmony.PatchAll();
@@ -432,11 +437,7 @@ namespace AtlyssArchipelagoWIP
             }
 
             ProcessItemDropQueue();
-
-            if (connected && (areaAccessOption == 0 || areaAccessOption == 2))
-            {
-                EnforcePortalLocks();
-            }
+            
         }
 
         private void ProcessItemDropQueue()
@@ -682,7 +683,7 @@ namespace AtlyssArchipelagoWIP
                     SendAPChatMessage(goalMessages[goalOption]);
                 }
 
-                ApplyAreaAccessMode();
+                portalLocker.ApplyAreaAccessMode();
                 try
                 {
                     _session.Socket.SendPacket(new GetDataPackagePacket { Games = new[] { "ATLYSS" } });
@@ -816,8 +817,8 @@ namespace AtlyssArchipelagoWIP
                 if (itemName == "Catacombs Portal")
                 {
                     _catacombsPortalReceived = true;
-                    UnlockCatacombsPortal();
-                    CheckProgressiveUnlock();
+                    portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
+                    portalLocker.CheckProgressiveUnlock();
                     return;
                 }
                 if (itemName == "Grove Portal")
@@ -825,11 +826,11 @@ namespace AtlyssArchipelagoWIP
                     _grovePortalReceived = true;
                     if (areaAccessOption != 2)
                     {
-                        UnlockGrovePortal();
+                        portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
                     }
                     else
                     {
-                        CheckProgressiveUnlock();
+                        portalLocker.CheckProgressiveUnlock();
                     }
                     return;
                 }
@@ -1012,194 +1013,14 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        private void UnlockCatacombsPortal()
-        {
-            try
-            {
-                Player localPlayer = Player._mainPlayer;
-                if (localPlayer == null)
-                {
-                    Logger.LogError("[AtlyssAP] Cannot unlock portal - Player not found!");
-                    return;
-                }
+        // UnlockCatacombsPortal removed
+        // UnlockGrovePortal removed
+        // CheckProgressiveUnlock moved to PortalUnlocks.cs
+        // LockAllPortals removed
+        // EnforcePortalLocks moved to PortalUnlocks.cs
+        // ApplyAreaAccessMode moved to PortalUnlocks.cs
 
-                string catacombsMapName = "_dungeon_catacombs";
-
-                if (localPlayer._waypointAttunements.Contains(catacombsMapName))
-                {
-                    Logger.LogInfo("[AtlyssAP] Catacombs portal already unlocked");
-                    return;
-                }
-
-                localPlayer._waypointAttunements.Add(catacombsMapName);
-
-                if (WorldPortalManager._current != null)
-                {
-                    WorldPortalManager._current.Refresh_ZoneEntries();
-                }
-                Logger.LogInfo("[AtlyssAP] Catacombs Portal unlocked!");
-                SendAPChatMessage("Portal unlocked: <color=cyan>Catacombs</color>");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[AtlyssAP] Failed to unlock Catacombs portal: {ex.Message}");
-            }
-        }
-
-        private void UnlockGrovePortal()
-        {
-            try
-            {
-                Player localPlayer = Player._mainPlayer;
-                if (localPlayer == null)
-                {
-                    Logger.LogError("[AtlyssAP] Cannot unlock portal - Player not found!");
-                    return;
-                }
-
-                string groveMapName = "_dungeon_crescentGrove";
-
-                if (localPlayer._waypointAttunements.Contains(groveMapName))
-                {
-                    Logger.LogInfo("[AtlyssAP] Grove portal already unlocked");
-                    return;
-                }
-
-                localPlayer._waypointAttunements.Add(groveMapName);
-
-                if (WorldPortalManager._current != null)
-                {
-                    WorldPortalManager._current.Refresh_ZoneEntries();
-                }
-                Logger.LogInfo("[AtlyssAP] Grove Portal unlocked!");
-                SendAPChatMessage("Portal unlocked: <color=cyan>The Grove</color>");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[AtlyssAP] Failed to unlock Grove portal: {ex.Message}");
-            }
-        }
-
-        private void CheckProgressiveUnlock()
-        {
-            if (areaAccessOption != 2) return;
-            if (_catacombsPortalReceived && _grovePortalReceived)
-            {
-                UnlockGrovePortal();
-                SendAPChatMessage("<color=cyan>Both portals found - Grove unlocked!</color>");
-            }
-            else if (_grovePortalReceived && !_catacombsPortalReceived)
-            {
-                SendAPChatMessage("Grove portal found, but need <color=yellow>Catacombs portal</color> first!");
-            }
-        }
-
-        private void LockAllPortals()
-        {
-            try
-            {
-                Player localPlayer = Player._mainPlayer;
-                if (localPlayer == null)
-                {
-                    Logger.LogError("[AtlyssAP] Cannot lock portals - Player not found!");
-                    return;
-                }
-                string catacombsMapName = "_dungeon_catacombs";
-                string groveMapName = "_dungeon_crescentGrove";
-
-                int lockedCount = 0;
-
-                if (localPlayer._waypointAttunements.Contains(catacombsMapName))
-                {
-                    localPlayer._waypointAttunements.Remove(catacombsMapName);
-                    lockedCount++;
-                }
-
-                if (localPlayer._waypointAttunements.Contains(groveMapName))
-                {
-                    localPlayer._waypointAttunements.Remove(groveMapName);
-                    lockedCount++;
-                }
-
-                if (WorldPortalManager._current != null)
-                {
-                    WorldPortalManager._current.Refresh_ZoneEntries();
-                }
-                Logger.LogInfo($"[AtlyssAP] Locked {lockedCount} portals for Archipelago mode");
-
-                if (lockedCount > 0)
-                {
-                    SendAPChatMessage($"<color=orange>{lockedCount} portals locked</color> - find portal items to unlock!");
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[AtlyssAP] Failed to lock portals: {ex.Message}");
-            }
-        }
-
-        private void EnforcePortalLocks()
-        {
-            Player localPlayer = Player._mainPlayer;
-            if (localPlayer == null) return;
-            bool needsRefresh = false;
-
-            if (!_catacombsPortalReceived && localPlayer._waypointAttunements.Contains("_dungeon_catacombs"))
-            {
-                localPlayer._waypointAttunements.Remove("_dungeon_catacombs");
-                needsRefresh = true;
-            }
-
-            bool shouldLockGrove = false;
-
-            if (areaAccessOption == 0)
-            {
-
-                shouldLockGrove = !_grovePortalReceived;
-            }
-            else if (areaAccessOption == 2)
-            {
-
-                shouldLockGrove = !_catacombsPortalReceived || !_grovePortalReceived;
-            }
-            if (shouldLockGrove && localPlayer._waypointAttunements.Contains("_dungeon_crescentGrove"))
-            {
-                localPlayer._waypointAttunements.Remove("_dungeon_crescentGrove");
-                needsRefresh = true;
-            }
-
-            if (needsRefresh && WorldPortalManager._current != null)
-            {
-                WorldPortalManager._current.Refresh_ZoneEntries();
-            }
-        }
-        private void ApplyAreaAccessMode()
-        {
-            if (areaAccessOption == 1)
-            {
-                Logger.LogInfo("[AtlyssAP] Area Access: Unlocked - Opening all areas");
-
-                UnlockCatacombsPortal();
-                UnlockGrovePortal();
-                SendAPChatMessage("<color=cyan>All areas unlocked!</color>");
-            }
-            else if (areaAccessOption == 0)
-            {
-                Logger.LogInfo("[AtlyssAP] Area Access: Locked - Portals must be found");
-
-
-                LockAllPortals();
-            }
-            else if (areaAccessOption == 2)
-            {
-                Logger.LogInfo("[AtlyssAP] Area Access: Progressive - Portals unlock sequentially");
-
-
-                LockAllPortals();
-            }
-        }
-
-        private void SendAPChatMessage(string message)
+        public void SendAPChatMessage(string message)
         {
             try
             {
