@@ -420,7 +420,7 @@ namespace AtlyssArchipelagoWIP
 
         private IEnumerator EnforcePortalLocks(Scene newScene)
         {
-            if (!basePlugin.connected)
+            if (!basePlugin.connected || newScene.name == "map_dungeon00_sanctumCatacombs" || newScene.name == "map_dungeon01_crescentGrove")
             {
                 yield break; // we're not connected, so we don't know what to lock.
                 // >>> IDEA: Could possibly default to all areas locked to avoid breaking logic? <<<
@@ -492,6 +492,7 @@ namespace AtlyssArchipelagoWIP
         public void BlockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
         {
             lockedScenes.Add(sceneName);
+            StaticLogger.LogInfo($"{sceneName} has been locked by AP.");
         }
 
         public void UnblockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
