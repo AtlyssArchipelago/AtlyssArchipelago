@@ -8,9 +8,11 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.UI;
 namespace AtlyssArchipelagoWIP
 {
     [BepInPlugin("com.azrael.atlyss.ap", "Atlyss Archipelago", "1.3.1")]
@@ -25,11 +27,14 @@ namespace AtlyssArchipelagoWIP
 
         private static readonly FieldInfo maxOnscreenMessages = AccessTools.Field(typeof(ChatBehaviour), "_maxGameLogicLines");
 
-        private ConfigEntry<string> cfgServer;
-        private ConfigEntry<int> cfgPort;
-        private ConfigEntry<string> cfgSlot;
-        private ConfigEntry<string> cfgPassword;
+        public ConfigEntry<string> cfgServer;
+        public ConfigEntry<string> cfgSlot;
+        public ConfigEntry<string> cfgPassword;
         private ConfigEntry<bool> cfgAutoConnect;
+
+        public InputField apServer;
+        public InputField apSlot;
+        public InputField apPassword;
 
         private ArchipelagoSession _session;
         public bool connected;
@@ -386,8 +391,6 @@ namespace AtlyssArchipelagoWIP
             StaticLogger = Logger;
             cfgServer = Config.Bind("Connection", "Server", "localhost",
                 "Archipelago host. You can also put host:port here.");
-            cfgPort = Config.Bind("Connection", "Port", 38281,
-                "Archipelago port (ignored if Server includes :port).");
             cfgSlot = Config.Bind("Connection", "Slot", "Player",
                 "Your Archipelago slot name.");
             cfgPassword = Config.Bind("Connection", "Password", "",
@@ -604,15 +607,14 @@ namespace AtlyssArchipelagoWIP
             try
             {
                 Logger.LogInfo("[AtlyssAP] === CONNECTING TO ARCHIPELAGO ===");
-                ParseServer(cfgServer.Value, cfgPort.Value, out string host, out int port);
-                Logger.LogInfo($"[AtlyssAP] Server: {host}:{port}");
-                Logger.LogInfo($"[AtlyssAP] Slot: {cfgSlot.Value}");
-                _session = ArchipelagoSessionFactory.CreateSession(host, port);
+                Logger.LogInfo($"[AtlyssAP] Server: {apServer.text}");
+                Logger.LogInfo($"[AtlyssAP] Slot: {apSlot.text}");
+                _session = ArchipelagoSessionFactory.CreateSession(apServer.text);
                 Logger.LogInfo("[AtlyssAP] Session created");
-                string password = string.IsNullOrWhiteSpace(cfgPassword.Value) ? null : cfgPassword.Value;
+                string password = string.IsNullOrWhiteSpace(apPassword.text) ? null : apPassword.text;
                 LoginResult login = _session.TryConnectAndLogin(
                     "ATLYSS",
-                    cfgSlot.Value,
+                    apSlot.text,
                     ItemsHandlingFlags.AllItems,
                     password: password,
                     requestSlotData: true
@@ -633,6 +635,9 @@ namespace AtlyssArchipelagoWIP
                     return;
                 }
                 Logger.LogInfo("[AtlyssAP] Login successful!");
+                cfgServer.Value = apServer.text; // update the config with the new values the player entered (in case they are different)
+                cfgSlot.Value = apSlot.text;
+                cfgPassword.Value = apPassword.text;
 
                 try
                 {
@@ -1216,54 +1221,16 @@ namespace AtlyssArchipelagoWIP
                 host = "localhost";
             }
         }
-    }
 
-    [HarmonyPatch(typeof(ChatBehaviour), "Send_ChatMessage")]
-    public static class ChatBehaviourPatch
-    {
-        static bool Prefix(ChatBehaviour __instance, string _message)
+        public void ReenableSettingsTabs() // helper function for the settings menu harmony patch
         {
-            try
-            {
+            StartCoroutine(EnableSettingsTabs());
+        }
 
-                if (!string.IsNullOrEmpty(_message) && _message.StartsWith("/"))
-                {
-
-                    string[] apCommands = { "/release", "/collect", "/hint", "/help", "/players", "/status" };
-
-                    bool isAPCommand = false;
-                    foreach (string cmd in apCommands)
-                    {
-                        if (_message.StartsWith(cmd, StringComparison.OrdinalIgnoreCase))
-                        {
-                            isAPCommand = true;
-                            break;
-                        }
-                    }
-                    if (isAPCommand)
-                    {
-
-                        if (AtlyssArchipelagoPlugin.Instance != null)
-                        {
-                            AtlyssArchipelagoPlugin.Instance.HandleArchipelagoCommand(_message);
-                        }
-
-                        __instance._focusedInChat = false;
-
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                if (AtlyssArchipelagoPlugin.StaticLogger != null)
-                {
-                    AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Chat patch error: {ex.Message}");
-                }
-                return true;
-            }
+        private IEnumerator EnableSettingsTabs()
+        {
+            yield return new WaitForEndOfFrame();
+            GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu/_dolly_tabButtons").SetActive(true);
         }
     }
 }
