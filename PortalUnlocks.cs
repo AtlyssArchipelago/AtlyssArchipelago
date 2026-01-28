@@ -492,12 +492,13 @@ namespace AtlyssArchipelagoWIP
         public void BlockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
         {
             lockedScenes.Add(sceneName);
-            StaticLogger.LogInfo($"{sceneName} has been locked by AP.");
+            StaticLogger.LogInfo($"[AtlyssAP] {sceneName} has been locked by Archipelago");
         }
 
         public void UnblockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
         {
             lockedScenes.Remove(sceneName);
+            StaticLogger.LogInfo($"[AtlyssAP] {sceneName} is no longer being locked by Archipelago");
         }
     }
 }
