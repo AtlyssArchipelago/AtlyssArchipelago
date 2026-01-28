@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using System;
+using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -175,6 +176,168 @@ namespace AtlyssArchipelagoWIP
                     StaticLogger.LogError($"[AtlyssAP] Chat patch error: {ex.Message}");
                 }
                 return true;
+            }
+        }
+    }
+
+    public class SpikePatch
+    {
+        [HarmonyPatch(typeof(File), nameof(File.ReadAllText), new Type[] { typeof(string) })]
+        public static class File_ReadAllText_Patch
+        {
+            static bool Prefix(ref string path, ref string __result)
+            {
+                try
+                {
+                    if (AtlyssArchipelagoPlugin.Instance == null || !AtlyssArchipelagoPlugin.Instance.connected)
+                    {
+                        return true;
+                    }
+
+                    if (path.EndsWith("atl_itemBank") && !path.Contains("_ap"))
+                    {
+                        string apMasterPath = ArchipelagoSpikeStorage.GetAPMasterBankPath();
+
+                        if (File.Exists(apMasterPath))
+                        {
+                            __result = File.ReadAllText(apMasterPath);
+                            AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
+                                "[AtlyssAP] Redirected Spike load: MASTER bank -> AP MASTER bank"
+                            );
+                            return false;
+                        }
+                        else
+                        {
+                            __result = "{ \"_heldItemStorage\": [] }";
+                            return false;
+                        }
+                    }
+
+                    if (path.Contains("atl_itemBank_") && !path.Contains("_ap_"))
+                    {
+                        string fileName = Path.GetFileName(path);
+
+                        for (int i = 1; i <= 7; i++)
+                        {
+                            if (fileName == $"atl_itemBank_{i:D2}")
+                            {
+                                string apPath = ArchipelagoSpikeStorage.GetAPBankPath(i);
+
+                                if (File.Exists(apPath))
+                                {
+                                    __result = File.ReadAllText(apPath);
+                                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
+                                        $"[AtlyssAP] Redirected Spike load: bank {i} -> AP bank {i}"
+                                    );
+                                    return false;
+                                }
+                                else
+                                {
+                                    __result = "{ \"_heldItemStorage\": [] }";
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogError(
+                        $"[AtlyssAP] Error in File.ReadAllText patch: {ex.Message}"
+                    );
+                    return true;
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(File), nameof(File.WriteAllText), new Type[] { typeof(string), typeof(string) })]
+        public static class File_WriteAllText_Patch
+        {
+            static bool Prefix(ref string path, string contents)
+            {
+                try
+                {
+                    if (AtlyssArchipelagoPlugin.Instance == null || !AtlyssArchipelagoPlugin.Instance.connected)
+                    {
+                        return true;
+                    }
+
+                    if (path.EndsWith("atl_itemBank") && !path.Contains("_ap"))
+                    {
+                        string apMasterPath = ArchipelagoSpikeStorage.GetAPMasterBankPath();
+                        string dir = Path.GetDirectoryName(apMasterPath);
+                        if (!Directory.Exists(dir))
+                        {
+                            Directory.CreateDirectory(dir);
+                        }
+
+                        File.WriteAllText(apMasterPath, contents);
+
+                        AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
+                            "[AtlyssAP] Redirected Spike save: MASTER bank -> AP MASTER bank"
+                        );
+
+                        return false;
+                    }
+
+                    if (path.Contains("atl_itemBank_") && !path.Contains("_ap_"))
+                    {
+                        string fileName = Path.GetFileName(path);
+
+                        for (int i = 1; i <= 7; i++)
+                        {
+                            if (fileName == $"atl_itemBank_{i:D2}")
+                            {
+                                string apPath = ArchipelagoSpikeStorage.GetAPBankPath(i);
+                                File.WriteAllText(apPath, contents);
+
+                                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
+                                    $"[AtlyssAP] Redirected Spike save: bank {i} -> AP bank {i}"
+                                );
+
+                                return false;
+                            }
+                        }
+                    }
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogError(
+                        $"[AtlyssAP] Error in File.WriteAllText patch: {ex.Message}"
+                    );
+                    return true;
+                }
+            }
+        }
+
+        public static void InitializeAPStorage()
+        {
+            try
+            {
+                if (!ArchipelagoSpikeStorage.AreAPBanksInitialized())
+                {
+                    ArchipelagoSpikeStorage.InitializeAPBanks();
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
+                        "[AtlyssAP] Initialized AP Spike storage (separate from vanilla)"
+                    );
+                }
+                else
+                {
+                    int itemCount = ArchipelagoSpikeStorage.GetTotalItemCount();
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
+                        $"[AtlyssAP] AP Spike storage loaded ({itemCount} items stored)"
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError(
+                    $"[AtlyssAP] Failed to initialize AP storage: {ex.Message}"
+                );
             }
         }
     }
