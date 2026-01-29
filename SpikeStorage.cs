@@ -51,7 +51,7 @@ namespace AtlyssArchipelagoWIP
                     string json = JsonConvert.SerializeObject(emptyBank, Newtonsoft.Json.Formatting.Indented);
                     File.WriteAllText(masterPath, json);
 
-                    AtlyssArchipelagoPlugin.StaticLog?.LogInfo("[AtlyssAP] Created AP master item bank");
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Created AP master item bank");
                 }
 
                 for (int i = 1; i <= NUM_BANKS; i++)
@@ -64,15 +64,15 @@ namespace AtlyssArchipelagoWIP
                         string json = JsonConvert.SerializeObject(emptyBank, Newtonsoft.Json.Formatting.Indented);
                         File.WriteAllText(apBankPath, json);
 
-                        AtlyssArchipelagoPlugin.StaticLog?.LogInfo($"[AtlyssAP] Created AP item bank {i}");
+                        AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] Created AP item bank {i}");
                     }
                 }
 
-                AtlyssArchipelagoPlugin.StaticLog?.LogInfo($"[AtlyssAP] Archipelago item banks initialized");
+                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] Archipelago item banks initialized");
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLog?.LogError($"[AtlyssAP] Failed to initialize AP banks: {ex.Message}");
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to initialize AP banks: {ex.Message}");
             }
         }
 
@@ -93,7 +93,7 @@ namespace AtlyssArchipelagoWIP
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLog?.LogError($"[AtlyssAP] Failed to load AP bank {bankNumber}: {ex.Message}");
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to load AP bank {bankNumber}: {ex.Message}");
                 return new ItemBankData();
             }
         }
@@ -108,7 +108,7 @@ namespace AtlyssArchipelagoWIP
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLog?.LogError($"[AtlyssAP] Failed to save AP bank {bankNumber}: {ex.Message}");
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to save AP bank {bankNumber}: {ex.Message}");
             }
         }
 
@@ -129,7 +129,7 @@ namespace AtlyssArchipelagoWIP
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLog?.LogError($"[AtlyssAP] Failed to load AP master bank: {ex.Message}");
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to load AP master bank: {ex.Message}");
                 return new ItemBankData();
             }
         }
@@ -144,7 +144,7 @@ namespace AtlyssArchipelagoWIP
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLog?.LogError($"[AtlyssAP] Failed to save AP master bank: {ex.Message}");
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to save AP master bank: {ex.Message}");
             }
         }
 
@@ -178,7 +178,7 @@ namespace AtlyssArchipelagoWIP
 
                                 if (itemToAdd._quantity == 0)
                                 {
-                                    AtlyssArchipelagoPlugin.StaticLog?.LogInfo(
+                                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
                                         $"[AtlyssAP] Added {itemToAdd._itemName} to AP Spike bank {bankNum} (stacked)"
                                     );
                                     return true;
@@ -207,21 +207,21 @@ namespace AtlyssArchipelagoWIP
                         bank._heldItemStorage.Add(itemToAdd);
                         SaveAPBank(bankNum, bank);
 
-                        AtlyssArchipelagoPlugin.StaticLog?.LogInfo(
+                        AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
                             $"[AtlyssAP] Added {itemToAdd._itemName} to AP Spike bank {bankNum} slot {nextSlot}"
                         );
                         return true;
                     }
                 }
 
-                AtlyssArchipelagoPlugin.StaticLog?.LogWarning(
+                AtlyssArchipelagoPlugin.StaticLogger?.LogWarning(
                     $"[AtlyssAP] All AP Spike banks are full! Cannot add {itemToAdd._itemName}"
                 );
                 return false;
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLog?.LogError(
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError(
                     $"[AtlyssAP] Failed to add item to AP Spike: {ex.Message}"
                 );
                 return false;
@@ -251,7 +251,7 @@ namespace AtlyssArchipelagoWIP
 
                             if (itemToAdd._quantity == 0)
                             {
-                                AtlyssArchipelagoPlugin.StaticLog?.LogInfo(
+                                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
                                     $"[AtlyssAP] Added {itemToAdd._itemName} to AP Spike MASTER bank (stacked)"
                                 );
                                 return true;
@@ -280,7 +280,7 @@ namespace AtlyssArchipelagoWIP
                     masterBank._heldItemStorage.Add(itemToAdd);
                     SaveAPMasterBank(masterBank);
 
-                    AtlyssArchipelagoPlugin.StaticLog?.LogInfo(
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
                         $"[AtlyssAP] Added {itemToAdd._itemName} to AP Spike MASTER bank slot {nextSlot}"
                     );
                     return true;
@@ -290,7 +290,7 @@ namespace AtlyssArchipelagoWIP
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLog?.LogError(
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError(
                     $"[AtlyssAP] Failed to add to master bank: {ex.Message}"
                 );
                 return false;
@@ -340,11 +340,11 @@ namespace AtlyssArchipelagoWIP
                     SaveAPBank(i, emptyBank);
                 }
 
-                AtlyssArchipelagoPlugin.StaticLog?.LogInfo("[AtlyssAP] Cleared all AP item banks (master + numbered)");
+                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Cleared all AP item banks (master + numbered)");
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLog?.LogError($"[AtlyssAP] Failed to clear AP banks: {ex.Message}");
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to clear AP banks: {ex.Message}");
             }
         }
     }

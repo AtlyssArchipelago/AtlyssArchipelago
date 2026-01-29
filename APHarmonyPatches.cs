@@ -30,7 +30,7 @@ namespace AtlyssArchipelagoWIP
                 // The Archipelago menu doesn't exist. Create it.
                 var apMenu = GameObject.Instantiate(GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu/_dolly_gameSettings")); // Copy an already existing tab
                 apMenu.name = "_dolly_apSettingsTab"; // rename this object (i don't care to rename the children because we don't need to)
-                apMenu.transform.SetParent(GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu").transform,false); // reparent it (copying removes the parent)
+                apMenu.transform.SetParent(GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu").transform, false); // reparent it (copying removes the parent)
                 var apMenuContent = apMenu.transform.Find("_backdrop_gameTab/Scroll View_gameTab/Viewport_gameTab/Content_gameTab"); // find the content
                 apMenuContent.transform.Find("_header_gameSettings/Text").GetComponent<Text>().text = "Archipelago Settings"; // change the header name
                 var apServerSetting = apMenuContent.transform.GetChild(1); // grab the settings we'll be changing
@@ -86,7 +86,7 @@ namespace AtlyssArchipelagoWIP
                 apSettingsTabButton.name = "Button_apTab";
                 apSettingsTabButton.GetComponentInChildren<Text>().text = "Archipelago";
                 var settingsTabs = GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu/_dolly_tabButtons");
-                apSettingsTabButton.transform.SetParent(settingsTabs.transform,false);
+                apSettingsTabButton.transform.SetParent(settingsTabs.transform, false);
                 settingsTabs.GetComponent<HorizontalLayoutGroup>().childScaleWidth = true;
                 settingsTabs.GetComponent<HorizontalLayoutGroup>().childControlWidth = true;
                 settingsTabs.GetComponent<HorizontalLayoutGroup>().padding.right = 8; // make it symmetrical
@@ -138,10 +138,8 @@ namespace AtlyssArchipelagoWIP
         {
             try
             {
-
                 if (!string.IsNullOrEmpty(_message) && _message.StartsWith("/"))
                 {
-
                     string[] apCommands = { "/release", "/collect", "/hint", "/help", "/players", "/status" };
 
                     bool isAPCommand = false;
@@ -153,16 +151,15 @@ namespace AtlyssArchipelagoWIP
                             break;
                         }
                     }
+
                     if (isAPCommand)
                     {
-
                         if (AtlyssArchipelagoPlugin.Instance != null)
                         {
                             AtlyssArchipelagoPlugin.Instance.HandleArchipelagoCommand(_message);
                         }
 
                         __instance._focusedInChat = false;
-
                         return false;
                     }
                 }
@@ -171,10 +168,7 @@ namespace AtlyssArchipelagoWIP
             }
             catch (Exception ex)
             {
-                if (StaticLogger != null)
-                {
-                    StaticLogger.LogError($"[AtlyssAP] Chat patch error: {ex.Message}");
-                }
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Chat patch error: {ex.Message}");
                 return true;
             }
         }
@@ -201,9 +195,7 @@ namespace AtlyssArchipelagoWIP
                         if (File.Exists(apMasterPath))
                         {
                             __result = File.ReadAllText(apMasterPath);
-                            AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
-                                "[AtlyssAP] Redirected Spike load: MASTER bank -> AP MASTER bank"
-                            );
+                            AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Redirected Spike load: MASTER bank -> AP MASTER bank");
                             return false;
                         }
                         else
@@ -226,9 +218,7 @@ namespace AtlyssArchipelagoWIP
                                 if (File.Exists(apPath))
                                 {
                                     __result = File.ReadAllText(apPath);
-                                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
-                                        $"[AtlyssAP] Redirected Spike load: bank {i} -> AP bank {i}"
-                                    );
+                                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] Redirected Spike load: bank {i} -> AP bank {i}");
                                     return false;
                                 }
                                 else
@@ -244,9 +234,7 @@ namespace AtlyssArchipelagoWIP
                 }
                 catch (Exception ex)
                 {
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogError(
-                        $"[AtlyssAP] Error in File.ReadAllText patch: {ex.Message}"
-                    );
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Error in File.ReadAllText patch: {ex.Message}");
                     return true;
                 }
             }
@@ -274,11 +262,7 @@ namespace AtlyssArchipelagoWIP
                         }
 
                         File.WriteAllText(apMasterPath, contents);
-
-                        AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
-                            "[AtlyssAP] Redirected Spike save: MASTER bank -> AP MASTER bank"
-                        );
-
+                        AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Redirected Spike save: MASTER bank -> AP MASTER bank");
                         return false;
                     }
 
@@ -292,11 +276,7 @@ namespace AtlyssArchipelagoWIP
                             {
                                 string apPath = ArchipelagoSpikeStorage.GetAPBankPath(i);
                                 File.WriteAllText(apPath, contents);
-
-                                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
-                                    $"[AtlyssAP] Redirected Spike save: bank {i} -> AP bank {i}"
-                                );
-
+                                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] Redirected Spike save: bank {i} -> AP bank {i}");
                                 return false;
                             }
                         }
@@ -306,9 +286,7 @@ namespace AtlyssArchipelagoWIP
                 }
                 catch (Exception ex)
                 {
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogError(
-                        $"[AtlyssAP] Error in File.WriteAllText patch: {ex.Message}"
-                    );
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Error in File.WriteAllText patch: {ex.Message}");
                     return true;
                 }
             }
@@ -321,23 +299,17 @@ namespace AtlyssArchipelagoWIP
                 if (!ArchipelagoSpikeStorage.AreAPBanksInitialized())
                 {
                     ArchipelagoSpikeStorage.InitializeAPBanks();
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
-                        "[AtlyssAP] Initialized AP Spike storage (separate from vanilla)"
-                    );
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Initialized AP Spike storage (separate from vanilla)");
                 }
                 else
                 {
                     int itemCount = ArchipelagoSpikeStorage.GetTotalItemCount();
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
-                        $"[AtlyssAP] AP Spike storage loaded ({itemCount} items stored)"
-                    );
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] AP Spike storage loaded ({itemCount} items stored)");
                 }
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLogger?.LogError(
-                    $"[AtlyssAP] Failed to initialize AP storage: {ex.Message}"
-                );
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to initialize AP storage: {ex.Message}");
             }
         }
     }

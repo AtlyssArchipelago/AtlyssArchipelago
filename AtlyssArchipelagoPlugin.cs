@@ -8,6 +8,7 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
 using System;
+using System.IO; // Added for session file handling
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
@@ -52,15 +53,12 @@ namespace AtlyssArchipelagoWIP
         private HashSet<string> _completedQuests = new HashSet<string>();
         private bool _questDebugLogged = false;
 
-        private class PendingItemDrop
-        {
-            public string ItemName;
-            public Vector3 Position;
-            public ScriptableItem ScriptableItem;
-        }
-        private Queue<PendingItemDrop> _itemDropQueue = new Queue<PendingItemDrop>();
-        private float _itemDropCooldown = 0f;
-        private const float ITEM_DROP_DELAY = 0.3f;
+        // Added: Session tracking for automatic storage wipe on new seeds
+        private string currentSessionId = "";
+        private const string SESSION_FILE = "ap_session.json";
+
+        // Removed: PendingItemDrop class - replaced with Spike storage system
+        // Removed: _itemDropQueue and _itemDropCooldown - no longer needed with Spike storage
 
         private const long BASE_LOCATION_ID = 591000;
         private const long DEFEAT_SLIME_DIVA = BASE_LOCATION_ID + 1;
@@ -203,6 +201,9 @@ namespace AtlyssArchipelagoWIP
             return $"Location {locationId}";
         }
 
+        // Removed: 6 class tomes from item pool (Fighter, Mystic, Bandit, Paladin, Magus, Bishop)
+        // Removed: 9 skill scrolls from item pool (Alacrity, Sturdy, Fira, Crya, Str/Dex/Mind Mastery, Taunt, Curis)
+        // New item count: 191 items (was 206)
         private static readonly Dictionary<string, string> ItemNameMapping = new Dictionary<string, string>
         {
 
@@ -363,26 +364,7 @@ namespace AtlyssArchipelagoWIP
             { "Geistlord Ring", "(lv-12) RING_Geistlord Ring" },
             { "Geistlord Band", "(lv-16) RING_Geistlord Band" },
             { "Valor Ring", "(lv-16) RING_Valor Ring" },
-            { "Valdur Effigy", "(lv-24) RING_Valdur Effigy" },
-
-
-            { "Tome of the Fighter", "(lv-10) CLASSTOME_Tome of the Fighter" },
-            { "Tome of the Mystic", "(lv-10) CLASSTOME_Tome of the Mystic" },
-            { "Tome of the Bandit", "(lv-10) CLASSTOME_Tome of the Bandit" },
-            { "Tome of the Paladin", "(lv-28) CLASSTOME_Tome of the Paladin" },
-            { "Tome of the Magus", "(lv-28) CLASSTOME_Tome of the Magus" },
-            { "Tome of the Bishop", "(lv-28) CLASSTOME_Tome of the Bishop" },
-
-
-            { "Skill Scroll (Alacrity)", "(lv-1) SKILLSCROLL_Skill Scroll (Alacrity)" },
-            { "Skill Scroll (Sturdy)", "(lv-1) SKILLSCROLL_Skill Scroll (Sturdy)" },
-            { "Skill Scroll (Fira)", "(lv-4) SKILLSCROLL_Skill Scroll (Fira)" },
-            { "Skill Scroll (Crya)", "(lv-4) SKILLSCROLL_Skill Scroll (Crya)" },
-            { "Skill Scroll (Strength Mastery)", "(lv-10) SKILLSCROLL_Skill Scroll (Strength Mastery)" },
-            { "Skill Scroll (Dexterity Mastery)", "(lv-10) SKILLSCROLL_Skill Scroll (Dexterity Mastery)" },
-            { "Skill Scroll (Mind Mastery)", "(lv-10) SKILLSCROLL_Skill Scroll (Mind Mastery)" },
-            { "Skill Scroll (Taunt)", "(lv-12) SKILLSCROLL_Skill Scroll (Taunt)" },
-            { "Skill Scroll (Curis)", "(lv-12) SKILLSCROLL_Skill Scroll (Curis)" }
+            { "Valdur Effigy", "(lv-24) RING_Valdur Effigy" }
         };
 
         private void Awake()
@@ -428,6 +410,8 @@ namespace AtlyssArchipelagoWIP
         {
             Disconnect();
         }
+
+        // Edited: Removed ProcessItemDropQueue() call - now using Spike storage instead
         private void Update()
         {
 
@@ -441,61 +425,8 @@ namespace AtlyssArchipelagoWIP
                 PollForLevelChanges();
                 PollForQuestCompletions();
             }
-
-            ProcessItemDropQueue();
-            
         }
 
-        private void ProcessItemDropQueue()
-        {
-
-            if (_itemDropCooldown > 0f)
-            {
-                _itemDropCooldown -= Time.deltaTime;
-                return;
-            }
-
-            if (_itemDropQueue.Count == 0)
-                return;
-
-            PendingItemDrop drop = _itemDropQueue.Dequeue();
-            try
-            {
-                Player localPlayer = Player._mainPlayer;
-                if (localPlayer == null)
-                {
-                    Logger.LogError("[AtlyssAP] Player not found when spawning from queue!");
-                    return;
-                }
-
-                ItemData itemData = new ItemData
-                {
-                    _itemName = drop.ScriptableItem._itemName,
-                    _quantity = 1,
-                    _maxQuantity = 99,
-                    _modifierID = 0,
-                    _isEquipped = false,
-                    _slotNumber = 0
-                };
-
-                GameManager._current.Server_SpawnNetItemObject(
-                    localPlayer.gameObject,
-                    itemData,
-                    null,
-                    drop.Position,
-                    0,
-                    localPlayer.gameObject.scene
-                );
-                Logger.LogInfo($"[AtlyssAP] Dropped {drop.ItemName} at {drop.Position} ({_itemDropQueue.Count} remaining in queue)");
-
-                _itemDropCooldown = ITEM_DROP_DELAY;
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[AtlyssAP] Failed to spawn {drop.ItemName}: {ex.Message}");
-                Logger.LogError($"[AtlyssAP] Stack: {ex.StackTrace}");
-            }
-        }
         private void PollForLevelChanges()
         {
             try
@@ -588,6 +519,38 @@ namespace AtlyssArchipelagoWIP
             catch (Exception ex)
             {
                 Logger.LogError($"[AtlyssAP] Error polling quests: {ex.Message}");
+            }
+        }
+
+        // Added: Session management to automatically wipe storage on new seeds
+        private bool IsNewSession(string sessionId)
+        {
+            try
+            {
+                string sessionPath = Path.Combine(Application.persistentDataPath, SESSION_FILE);
+                if (!File.Exists(sessionPath))
+                    return true;
+
+                string savedId = File.ReadAllText(sessionPath);
+                return savedId != sessionId;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        private void SaveSessionId(string sessionId)
+        {
+            try
+            {
+                string sessionPath = Path.Combine(Application.persistentDataPath, SESSION_FILE);
+                File.WriteAllText(sessionPath, sessionId);
+                Logger.LogInfo($"Saved session ID: {sessionId}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to save session ID: {ex.Message}");
             }
         }
 
@@ -692,6 +655,19 @@ namespace AtlyssArchipelagoWIP
                 }
 
                 portalLocker.ApplyAreaAccessMode();
+
+                // Added: Session tracking and storage initialization for Spike integration
+                string newSessionId = $"{apServer.text}_{apSlot.text}_{_session.RoomState.Seed}";
+                if (IsNewSession(newSessionId))
+                {
+                    Logger.LogInfo("[AtlyssAP] New AP session detected - clearing storage");
+                    ArchipelagoSpikeStorage.ClearAllAPBanks();
+                    SaveSessionId(newSessionId);
+                }
+                currentSessionId = newSessionId;
+
+                SpikePatch.InitializeAPStorage();
+
                 try
                 {
                     _session.Socket.SendPacket(new GetDataPackagePacket { Games = new[] { "ATLYSS" } });
@@ -730,7 +706,7 @@ namespace AtlyssArchipelagoWIP
                 connecting = false;
                 Logger.LogInfo("=== [AtlyssAP] Connected and ready! ===");
                 Logger.LogInfo("[AtlyssAP] Automatic detection active - level-ups and quests will be tracked!");
-                Logger.LogInfo("[AtlyssAP] Items will drop on the ground - pick them up!");
+                Logger.LogInfo("[AtlyssAP] Items will be sent to Spike storage!"); // Edited: Changed from "drop on ground"
             }
             catch (Exception ex)
             {
@@ -741,19 +717,21 @@ namespace AtlyssArchipelagoWIP
                 connected = false;
             }
         }
+
+        // Edited: Removed item drop queue cleanup - no longer needed with Spike storage
         private void Disconnect()
         {
             try
             {
                 if (_session != null)
                 {
-                    try { _session.Items.ItemReceived -= OnItemReceived; } catch {  }
+                    try { _session.Items.ItemReceived -= OnItemReceived; } catch { }
                     try
                     {
                         if (_session.Socket != null)
                             _session.Socket.DisconnectAsync();
                     }
-                    catch {  }
+                    catch { }
                 }
             }
             finally
@@ -765,8 +743,6 @@ namespace AtlyssArchipelagoWIP
                 _completedQuests.Clear();
                 _lastLevel = 0;
                 _questDebugLogged = false;
-                _itemDropQueue.Clear();
-                _itemDropCooldown = 0f;
                 Logger.LogInfo("[AtlyssAP] Disconnected.");
             }
         }
@@ -817,47 +793,94 @@ namespace AtlyssArchipelagoWIP
                 Logger.LogError($"[AtlyssAP] Error receiving item: {ex.Message}");
             }
         }
+
+        // Edited: Completely replaced to use Spike storage instead of item drops
         private void HandleReceivedItem(string itemName)
         {
             try
             {
-
+                
                 if (itemName == "Catacombs Portal")
                 {
                     _catacombsPortalReceived = true;
-                    portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
-                    portalLocker.CheckProgressiveUnlock();
+                    Logger.LogInfo("[AtlyssAP] Received Catacombs Portal!");
+
+                    if (areaAccessOption == 0) // Locked mode
+                    {
+                        portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
+                        SendAPChatMessage("<color=cyan>Catacombs portal unlocked!</color>");
+                    }
+                    else if (areaAccessOption == 2) // Progressive mode
+                    {
+                        portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
+                        SendAPChatMessage("<color=cyan>Catacombs portal unlocked!</color>");
+                        portalLocker.CheckProgressiveUnlock();
+                    }
                     return;
                 }
-                if (itemName == "Grove Portal")
+                else if (itemName == "Grove Portal")
                 {
                     _grovePortalReceived = true;
-                    if (areaAccessOption != 2)
+                    Logger.LogInfo("[AtlyssAP] Received Grove Portal!");
+
+                    if (areaAccessOption == 0) // Locked mode
                     {
                         portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
+                        SendAPChatMessage("<color=cyan>Grove portal unlocked!</color>");
                     }
-                    else
+                    else if (areaAccessOption == 2) // Progressive mode
                     {
+                        portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
+                        SendAPChatMessage("<color=cyan>Grove portal unlocked!</color>");
                         portalLocker.CheckProgressiveUnlock();
                     }
                     return;
                 }
 
-                if (itemName.StartsWith("Crowns"))
+                
+                if (itemName.EndsWith(" Crowns"))
                 {
                     int amount = GetCurrencyAmount(itemName);
-                    GiveCurrency(amount);
+                    if (amount > 0)
+                    {
+                        GiveCurrency(amount);
+                        SendAPChatMessage($"<color=yellow>Received {amount} Crowns!</color>");
+                        Logger.LogInfo($"[AtlyssAP] Gave {amount} crowns to player");
+                    }
                     return;
                 }
 
+                // Replaced: Item drops replaced with Spike storage integration
                 if (ItemNameMapping.TryGetValue(itemName, out string gameItemName))
                 {
                     int quantity = DetermineItemQuantity(itemName);
-                    DropItem(gameItemName, quantity);
+
+                    try
+                    {
+                        ItemData itemData = CreateItemData(gameItemName, quantity);
+
+                        if (itemData != null)
+                        {
+                            if (ArchipelagoSpikeStorage.AddItemToAPSpike(itemData))
+                            {
+                                SendAPChatMessage($"<color=yellow>Received {itemName}!</color> Check Spike's storage!");
+                                Logger.LogInfo($"[AtlyssAP] Added {itemName} to Spike storage");
+                            }
+                            else
+                            {
+                                Logger.LogWarning($"[AtlyssAP] Failed to add {itemName} to storage - banks full!");
+                                SendAPChatMessage($"<color=red>Storage full! Could not store {itemName}</color>");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"[AtlyssAP] Failed to process item {itemName}: {ex.Message}");
+                    }
                 }
                 else
                 {
-                    Logger.LogWarning($"[AtlyssAP] Unknown item type: {itemName}");
+                    Logger.LogWarning($"[AtlyssAP] Unknown item: {itemName}");
                 }
             }
             catch (Exception ex)
@@ -865,6 +888,91 @@ namespace AtlyssArchipelagoWIP
                 Logger.LogError($"[AtlyssAP] Error handling item '{itemName}': {ex.Message}");
             }
         }
+
+        
+        private ItemData CreateItemData(string gameItemName, int quantity)
+        {
+            string itemName = gameItemName;
+
+            int lastUnderscoreIndex = gameItemName.LastIndexOf('_');
+            if (lastUnderscoreIndex >= 0 && lastUnderscoreIndex < gameItemName.Length - 1)
+            {
+                itemName = gameItemName.Substring(lastUnderscoreIndex + 1);
+            }
+
+            Logger.LogInfo($"[AtlyssAP] DEBUG: Looking up item: '{itemName}'");
+
+            ScriptableItem scriptableItem = null;
+            List<string> attemptedNames = new List<string>();
+
+            scriptableItem = GameManager._current.Locate_Item(itemName);
+            attemptedNames.Add($"1. '{itemName}'");
+
+            if (scriptableItem == null && itemName.Contains(" (") && itemName.EndsWith(")"))
+            {
+                int parenIndex = itemName.LastIndexOf(" (");
+                string baseItemName = itemName.Substring(0, parenIndex);
+                Logger.LogInfo($"[AtlyssAP] DEBUG: Attempt 2 - base name: '{baseItemName}'");
+                scriptableItem = GameManager._current.Locate_Item(baseItemName);
+                attemptedNames.Add($"2. '{baseItemName}'");
+            }
+
+            if (scriptableItem == null && itemName != gameItemName)
+            {
+                Logger.LogInfo($"[AtlyssAP] DEBUG: Attempt 3 - full Unity name: '{gameItemName}'");
+                scriptableItem = GameManager._current.Locate_Item(gameItemName);
+                attemptedNames.Add($"3. '{gameItemName}'");
+            }
+
+            if (scriptableItem == null)
+            {
+                string noSpaces = itemName.Replace(" ", "");
+                Logger.LogInfo($"[AtlyssAP] DEBUG: Attempt 4 - no spaces: '{noSpaces}'");
+                scriptableItem = GameManager._current.Locate_Item(noSpaces);
+                attemptedNames.Add($"4. '{noSpaces}'");
+            }
+
+            if (scriptableItem == null && gameItemName.Contains("WEAPON_"))
+            {
+                string afterWeapon = gameItemName.Substring(gameItemName.IndexOf("WEAPON_") + 7);
+                if (afterWeapon.Contains(" ("))
+                {
+                    string weaponOnly = afterWeapon.Substring(0, afterWeapon.IndexOf(" ("));
+                    Logger.LogInfo($"[AtlyssAP] DEBUG: Attempt 5 - weapon name only: '{weaponOnly}'");
+                    scriptableItem = GameManager._current.Locate_Item(weaponOnly);
+                    attemptedNames.Add($"5. '{weaponOnly}'");
+                }
+            }
+
+            if (scriptableItem == null)
+            {
+                Logger.LogError($"[AtlyssAP] Could not find ScriptableItem for: '{itemName}'");
+                Logger.LogError($"[AtlyssAP] Original Unity name: '{gameItemName}'");
+                Logger.LogError($"[AtlyssAP] Tried {attemptedNames.Count} variations:");
+                foreach (string attempt in attemptedNames)
+                {
+                    Logger.LogError($"[AtlyssAP]   - {attempt}");
+                }
+                Logger.LogWarning($"[AtlyssAP] This item may not be available in the current game version or uses a different name format");
+                return null;
+            }
+
+            Logger.LogInfo($"[AtlyssAP] DEBUG: Found ScriptableItem: {scriptableItem._itemName}");
+
+            ItemData itemData = new ItemData
+            {
+                _itemName = scriptableItem._itemName,
+                _quantity = quantity,
+                _maxQuantity = 99, // Edited: Hardcoded to 99 because _maxQuantity field doesn't exist on ScriptableItem
+                _modifierID = 0,
+                _isEquipped = false,
+                _slotNumber = 0
+            };
+
+            Logger.LogInfo($"[AtlyssAP] Successfully created ItemData for: {scriptableItem._itemName}");
+            return itemData;
+        }
+
         private int GetCurrencyAmount(string itemName)
         {
             if (itemName == "Crowns (Small)") return 100;
@@ -873,6 +981,7 @@ namespace AtlyssArchipelagoWIP
             if (itemName == "Crowns (Huge)") return 5000;
             return 100;
         }
+
         private int DetermineItemQuantity(string itemName)
         {
             if (itemName.EndsWith("Pack"))
@@ -915,118 +1024,9 @@ namespace AtlyssArchipelagoWIP
                 Logger.LogError($"[AtlyssAP] Failed to give currency: {ex.Message}");
             }
         }
-        private void DropItem(string gameItemName, int quantity)
-        {
-            try
-            {
-                Logger.LogInfo($"[AtlyssAP] Queuing {quantity}x {gameItemName} to drop...");
-                Player localPlayer = Player._mainPlayer;
-                if (localPlayer == null)
-                {
-                    Logger.LogError("[AtlyssAP] Player not found!");
-                    return;
-                }
 
-                Vector3 playerPos = localPlayer.transform.position;
-
-                string itemName = gameItemName;
-                int lastUnderscoreIndex = gameItemName.LastIndexOf('_');
-                if (lastUnderscoreIndex >= 0 && lastUnderscoreIndex < gameItemName.Length - 1)
-                {
-                    itemName = gameItemName.Substring(lastUnderscoreIndex + 1);
-                }
-                Logger.LogInfo($"[AtlyssAP] DEBUG: Looking up item: '{itemName}'");
-
-                ScriptableItem scriptableItem = null;
-                List<string> attemptedNames = new List<string>();
-
-                scriptableItem = GameManager._current.Locate_Item(itemName);
-                attemptedNames.Add($"1. '{itemName}'");
-
-                if (scriptableItem == null && itemName.Contains(" (") && itemName.EndsWith(")"))
-                {
-                    int parenIndex = itemName.LastIndexOf(" (");
-                    string baseItemName = itemName.Substring(0, parenIndex);
-                    Logger.LogInfo($"[AtlyssAP] DEBUG: Attempt 2 - base name: '{baseItemName}'");
-                    scriptableItem = GameManager._current.Locate_Item(baseItemName);
-                    attemptedNames.Add($"2. '{baseItemName}'");
-                }
-
-                if (scriptableItem == null && itemName != gameItemName)
-                {
-                    Logger.LogInfo($"[AtlyssAP] DEBUG: Attempt 3 - full Unity name: '{gameItemName}'");
-                    scriptableItem = GameManager._current.Locate_Item(gameItemName);
-                    attemptedNames.Add($"3. '{gameItemName}'");
-                }
-
-                if (scriptableItem == null)
-                {
-                    string noSpaces = itemName.Replace(" ", "");
-                    Logger.LogInfo($"[AtlyssAP] DEBUG: Attempt 4 - no spaces: '{noSpaces}'");
-                    scriptableItem = GameManager._current.Locate_Item(noSpaces);
-                    attemptedNames.Add($"4. '{noSpaces}'");
-                }
-
-                if (scriptableItem == null && gameItemName.Contains("WEAPON_"))
-                {
-
-                    string afterWeapon = gameItemName.Substring(gameItemName.IndexOf("WEAPON_") + 7);
-                    if (afterWeapon.Contains(" ("))
-                    {
-                        string weaponOnly = afterWeapon.Substring(0, afterWeapon.IndexOf(" ("));
-                        Logger.LogInfo($"[AtlyssAP] DEBUG: Attempt 5 - weapon name only: '{weaponOnly}'");
-                        scriptableItem = GameManager._current.Locate_Item(weaponOnly);
-                        attemptedNames.Add($"5. '{weaponOnly}'");
-                    }
-                }
-                if (scriptableItem == null)
-                {
-                    Logger.LogError($"[AtlyssAP] Could not find ScriptableItem for: '{itemName}'");
-                    Logger.LogError($"[AtlyssAP] Original Unity name: '{gameItemName}'");
-                    Logger.LogError($"[AtlyssAP] Tried {attemptedNames.Count} variations:");
-                    foreach (string attempt in attemptedNames)
-                    {
-                        Logger.LogError($"[AtlyssAP]   - {attempt}");
-                    }
-                    Logger.LogWarning($"[AtlyssAP] This item may not be available in the current game version or uses a different name format");
-                    return;
-                }
-                Logger.LogInfo($"[AtlyssAP] DEBUG: Found ScriptableItem: {scriptableItem._itemName}");
-
-                for (int i = 0; i < quantity; i++)
-                {
-
-                    float angle = (360f / quantity) * i * Mathf.Deg2Rad;
-                    float radius = 2f;
-                    Vector3 spawnPos = playerPos + new Vector3(
-                        Mathf.Cos(angle) * radius,
-                        1.5f,
-                        Mathf.Sin(angle) * radius
-                    );
-
-                    _itemDropQueue.Enqueue(new PendingItemDrop
-                    {
-                        ItemName = itemName,
-                        Position = spawnPos,
-                        ScriptableItem = scriptableItem
-                    });
-                }
-                Logger.LogInfo($"[AtlyssAP] Queued {quantity}x {itemName}! Will drop one every {ITEM_DROP_DELAY}s");
-                Logger.LogInfo($"[AtlyssAP] Queue now has {_itemDropQueue.Count} items total");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[AtlyssAP] Failed to queue item '{gameItemName}': {ex.Message}");
-                Logger.LogError($"[AtlyssAP] Stack: {ex.StackTrace}");
-            }
-        }
-
-        // UnlockCatacombsPortal removed
-        // UnlockGrovePortal removed
-        // CheckProgressiveUnlock moved to PortalUnlocks.cs
-        // LockAllPortals removed
-        // EnforcePortalLocks moved to PortalUnlocks.cs
-        // ApplyAreaAccessMode moved to PortalUnlocks.cs
+        // Removed: ProcessItemDropQueue() - no longer needed with Spike storage
+        // Removed: DropItem() - replaced with CreateItemData() and Spike storage
 
         public void SendAPChatMessage(string message)
         {
@@ -1157,6 +1157,12 @@ namespace AtlyssArchipelagoWIP
             SendAPChatMessage("/status - Show completion status");
             SendAPChatMessage("/help - Show this message");
         }
+        // UnlockCatacombsPortal removed
+        // UnlockGrovePortal removed
+        // CheckProgressiveUnlock moved to PortalUnlocks.cs
+        // LockAllPortals removed
+        // EnforcePortalLocks moved to PortalUnlocks.cs
+        // ApplyAreaAccessMode moved to PortalUnlocks.cs
         private void HandlePlayersCommand()
         {
             try
