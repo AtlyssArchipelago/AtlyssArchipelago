@@ -8,7 +8,7 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
 using System;
-using System.IO; // Added for session file handling
+using System.IO;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
@@ -53,12 +53,8 @@ namespace AtlyssArchipelagoWIP
         private HashSet<string> _completedQuests = new HashSet<string>();
         private bool _questDebugLogged = false;
 
-        // Added: Session tracking for automatic storage wipe on new seeds
         private string currentSessionId = "";
         private const string SESSION_FILE = "ap_session.json";
-
-        // Removed: PendingItemDrop class - replaced with Spike storage system
-        // Removed: _itemDropQueue and _itemDropCooldown - no longer needed with Spike storage
 
         private const long BASE_LOCATION_ID = 591000;
         private const long DEFEAT_SLIME_DIVA = BASE_LOCATION_ID + 1;
@@ -385,9 +381,10 @@ namespace AtlyssArchipelagoWIP
 
             _harmony = new Harmony("com.azrael.atlyss.ap.harmony");
 
-            scriptHolder = new GameObject("Archipelago Script Holder"); // create a scriptholder for Archipelago helper scripts
+            scriptHolder = new GameObject("Archipelago Script Holder");
             DontDestroyOnLoad(scriptHolder);
             portalLocker = scriptHolder.AddComponent<PortalUnlocks>();
+
             try
             {
                 _harmony.PatchAll();
@@ -411,7 +408,6 @@ namespace AtlyssArchipelagoWIP
             Disconnect();
         }
 
-        // Edited: Removed ProcessItemDropQueue() call - now using Spike storage instead
         private void Update()
         {
 
@@ -522,7 +518,6 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // Added: Session management to automatically wipe storage on new seeds
         private bool IsNewSession(string sessionId)
         {
             try
@@ -656,7 +651,6 @@ namespace AtlyssArchipelagoWIP
 
                 portalLocker.ApplyAreaAccessMode();
 
-                // Added: Session tracking and storage initialization for Spike integration
                 string newSessionId = $"{apServer.text}_{apSlot.text}_{_session.RoomState.Seed}";
                 if (IsNewSession(newSessionId))
                 {
@@ -706,7 +700,7 @@ namespace AtlyssArchipelagoWIP
                 connecting = false;
                 Logger.LogInfo("=== [AtlyssAP] Connected and ready! ===");
                 Logger.LogInfo("[AtlyssAP] Automatic detection active - level-ups and quests will be tracked!");
-                Logger.LogInfo("[AtlyssAP] Items will be sent to Spike storage!"); // Edited: Changed from "drop on ground"
+                Logger.LogInfo("[AtlyssAP] Items will be sent to Spike storage!");
             }
             catch (Exception ex)
             {
@@ -718,7 +712,6 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // Edited: Removed item drop queue cleanup - no longer needed with Spike storage
         private void Disconnect()
         {
             try
@@ -794,7 +787,6 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // Edited: Completely replaced to use Spike storage instead of item drops
         private void HandleReceivedItem(string itemName)
         {
             try
@@ -850,7 +842,6 @@ namespace AtlyssArchipelagoWIP
                     return;
                 }
 
-                // Replaced: Item drops replaced with Spike storage integration
                 if (ItemNameMapping.TryGetValue(itemName, out string gameItemName))
                 {
                     int quantity = DetermineItemQuantity(itemName);
@@ -963,7 +954,7 @@ namespace AtlyssArchipelagoWIP
             {
                 _itemName = scriptableItem._itemName,
                 _quantity = quantity,
-                _maxQuantity = 99, // Edited: Hardcoded to 99 because _maxQuantity field doesn't exist on ScriptableItem
+                _maxQuantity = 99,
                 _modifierID = 0,
                 _isEquipped = false,
                 _slotNumber = 0
@@ -1025,9 +1016,6 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // Removed: ProcessItemDropQueue() - no longer needed with Spike storage
-        // Removed: DropItem() - replaced with CreateItemData() and Spike storage
-
         public void SendAPChatMessage(string message)
         {
             try
@@ -1035,7 +1023,7 @@ namespace AtlyssArchipelagoWIP
                 Player localPlayer = Player._mainPlayer;
                 if (localPlayer == null) return;
                 ChatBehaviour chat = localPlayer._chatBehaviour;
-                maxOnscreenMessages.SetValue(chat, 50); // increase the max amount of text shown onscreen
+                maxOnscreenMessages.SetValue(chat, 50);
                 if (chat == null) return;
 
                 chat.Init_GameLogicMessage(
@@ -1157,12 +1145,7 @@ namespace AtlyssArchipelagoWIP
             SendAPChatMessage("/status - Show completion status");
             SendAPChatMessage("/help - Show this message");
         }
-        // UnlockCatacombsPortal removed
-        // UnlockGrovePortal removed
-        // CheckProgressiveUnlock moved to PortalUnlocks.cs
-        // LockAllPortals removed
-        // EnforcePortalLocks moved to PortalUnlocks.cs
-        // ApplyAreaAccessMode moved to PortalUnlocks.cs
+
         private void HandlePlayersCommand()
         {
             try
@@ -1208,7 +1191,7 @@ namespace AtlyssArchipelagoWIP
             }
         }
         private static void ParseServer(string raw, int fallbackPort, out string host, out int port)
-        {
+        {   // >>> IDEA: We're not using this anymore, since the new in-game UI combines host/port already. Remove? <<<
             host = (raw ?? "localhost").Trim();
             port = fallbackPort;
             int colonIndex = host.LastIndexOf(':');
