@@ -1,4 +1,5 @@
-﻿using HarmonyLib;
+﻿using Archipelago.MultiClient.Net.BounceFeatures.DeathLink;
+using HarmonyLib;
 using System;
 using System.IO;
 using UnityEngine;
@@ -8,6 +9,27 @@ using static AtlyssArchipelagoWIP.AtlyssArchipelagoPlugin;
 
 namespace AtlyssArchipelagoWIP
 {
+    [HarmonyPatch(typeof(SettingsManager), "Close_SettingsMenu")]
+    // Updates the Archipelago DeathLink setting when the settings menu is closed, regardless of if the `Save` button was pressed.
+    class SettingsMenuClosePatch
+    {
+        static void Prefix(SettingsManager __instance)
+        {
+            if (!GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu/_dolly_apSettingsTab"))
+            {
+                return;
+            }
+            AtlyssArchipelagoPlugin basePlugin = AtlyssArchipelagoPlugin.Instance;
+            var apDeathLinkToggle = GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu/_dolly_apSettingsTab/_backdrop_gameTab/Scroll View_gameTab/Viewport_gameTab/Content_gameTab/_cell_fadeGameFeed/Toggle_fadeGameFeed")
+                .GetComponent<Toggle>();
+            if (apDeathLinkToggle.isOn != basePlugin.cfgDeathlink.Value) // the toggle was changed. update the Archipelago server accordingly
+            {
+                basePlugin.ToggleDeathLink(apDeathLinkToggle.isOn);
+            }
+            basePlugin.cfgDeathlink.Value = apDeathLinkToggle.isOn;
+        }
+    }
+
     [HarmonyPatch(typeof(SettingsManager), "Open_SettingsMenu")]
     // Creates the new Archipelago settings menu when the menu is opened, if it doesn't already exist.
     class SettingsMenuOpenPatch
@@ -36,6 +58,9 @@ namespace AtlyssArchipelagoWIP
                 var apServerSetting = apMenuContent.transform.GetChild(1); // grab the settings we'll be changing
                 var apSlotSetting = apMenuContent.transform.GetChild(2);
                 var apPasswordSetting = apMenuContent.transform.GetChild(3);
+                var apDeathLinkSetting = apMenuContent.transform.GetChild(21);
+                apDeathLinkSetting.GetComponentInChildren<Text>().text = "DeathLink";
+                apDeathLinkSetting.GetComponent<SettingsCell>()._setToggle = null; // disable basegame functionality of this toggle (we're adding our own)
                 GameObject.Destroy(apServerSetting.transform.GetChild(1)); // remove the original buttons (we're replacing them)
                 GameObject.Destroy(apSlotSetting.transform.GetChild(1));
                 GameObject.Destroy(apPasswordSetting.transform.GetChild(1));
@@ -43,7 +68,7 @@ namespace AtlyssArchipelagoWIP
                 apSlotSetting.GetComponentInChildren<Text>().text = "Slot Name";
                 apPasswordSetting.GetComponentInChildren<Text>().text = "Password";
                 apMenuContent.transform.Find("_header_nametagSettings/Text").GetComponent<Text>().text = "Press F5 at any time to connect!";
-                for (int i = apMenuContent.childCount - 1; i >= 5; i--) // delete all other children, starting at the end
+                for (int i = apMenuContent.childCount - 3; i >= 5; i--) // delete all other children, starting at the end
                 {
                     GameObject child = apMenuContent.GetChild(i).gameObject;
                     GameObject.Destroy(child);
@@ -74,12 +99,14 @@ namespace AtlyssArchipelagoWIP
                 basePlugin.apServer = apServerInput.GetComponent<InputField>();
                 basePlugin.apSlot = apSlotInput.GetComponent<InputField>();
                 basePlugin.apPassword = apPasswordInput.GetComponent<InputField>();
+                basePlugin.apDeathlink = apDeathLinkSetting.transform.Find("Toggle_fadeGameFeed").gameObject.GetComponent<Toggle>();
                 ((Text)basePlugin.apServer.placeholder).text = "archipelago.gg:38281";
                 ((Text)basePlugin.apSlot.placeholder).text = "ATLYSSPlayer";
                 ((Text)basePlugin.apPassword.placeholder).text = "supersecret";
                 basePlugin.apServer.text = basePlugin.cfgServer.Value;
                 basePlugin.apSlot.text = basePlugin.cfgSlot.Value;
                 basePlugin.apPassword.text = basePlugin.cfgPassword.Value;
+                basePlugin.apDeathlink.isOn = basePlugin.cfgDeathlink.Value;
 
                 // Now to create the Archipelago button in the settings menu
                 var apSettingsTabButton = GameObject.Instantiate(GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu/_dolly_tabButtons/Button_gameTab"));
@@ -127,6 +154,28 @@ namespace AtlyssArchipelagoWIP
                 MenuElement apSettingsMenu = GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu/_dolly_apSettingsTab").GetComponent<MenuElement>();
                 apSettingsMenu.isEnabled = false;
             }
+        }
+    }
+
+    [HarmonyPatch(typeof(Player), "Player_OnDeath")]
+    // Sends a DeathLink when the player dies, but only when DeathLink is on.
+    // Also prevents incoming DeathLinks from sending another one out.
+    class PlayerDeathPatch
+    {
+        static void Postfix(Player __instance)
+        {
+            AtlyssArchipelagoPlugin basePlugin = AtlyssArchipelagoPlugin.Instance;
+            if (basePlugin._dlService == null || !basePlugin.cfgDeathlink.Value)
+            {
+                return;
+            }
+            if (reactingToDeathLink > 0) // we're dying because of a deathlink, don't send another one.
+            {// for some random reason, ATLYSS calls Player_OnDeath twice when the player dies.
+                reactingToDeathLink--;
+                return;
+            }
+            DeathLink dlToSend = new DeathLink(__instance._nickname, $"{__instance._nickname} was defeated.");
+            basePlugin._dlService.SendDeathLink(dlToSend);
         }
     }
 

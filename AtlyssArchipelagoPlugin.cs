@@ -14,6 +14,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
+using Archipelago.MultiClient.Net.BounceFeatures.DeathLink;
+using Newtonsoft.Json.Linq;
 namespace AtlyssArchipelagoWIP
 {
     [BepInPlugin("com.azrael.atlyss.ap", "Atlyss Archipelago", "1.3.1")]
@@ -31,15 +33,20 @@ namespace AtlyssArchipelagoWIP
         public ConfigEntry<string> cfgServer;
         public ConfigEntry<string> cfgSlot;
         public ConfigEntry<string> cfgPassword;
+        public ConfigEntry<bool> cfgDeathlink;
         private ConfigEntry<bool> cfgAutoConnect;
 
         public InputField apServer;
         public InputField apSlot;
         public InputField apPassword;
+        public Toggle apDeathlink;
 
         private ArchipelagoSession _session;
         public bool connected;
         private bool connecting;
+
+        public DeathLinkService _dlService;
+        public static int reactingToDeathLink;
 
         private int goalOption = 3;
         public int areaAccessOption = 0;
@@ -375,6 +382,8 @@ namespace AtlyssArchipelagoWIP
                 "Room password (optional).");
             cfgAutoConnect = Config.Bind("Connection", "AutoConnect", false,
                 "Auto-connect on game start.");
+            cfgDeathlink = Config.Bind("Connection", "DeathLink", false,
+                "If DeathLink should be enabled (can be changed ingame).");
             Logger.LogInfo("=== [AtlyssAP] Plugin loaded! Version 1.3.1 ===");
             Logger.LogInfo("[AtlyssAP] ALL QUESTS + Commands + Item Drops + 137 ITEMS!");
             Logger.LogInfo("[AtlyssAP] Press F5 to connect to Archipelago");
@@ -568,12 +577,14 @@ namespace AtlyssArchipelagoWIP
                 Logger.LogInfo($"[AtlyssAP] Server: {apServer.text}");
                 Logger.LogInfo($"[AtlyssAP] Slot: {apSlot.text}");
                 _session = ArchipelagoSessionFactory.CreateSession(apServer.text);
-                Logger.LogInfo("[AtlyssAP] Session created");
+                _dlService = _session.CreateDeathLinkService();
+                Logger.LogInfo("[AtlyssAP] Session and DeathLink service created");
                 string password = string.IsNullOrWhiteSpace(apPassword.text) ? null : apPassword.text;
                 LoginResult login = _session.TryConnectAndLogin(
                     "ATLYSS",
                     apSlot.text,
                     ItemsHandlingFlags.AllItems,
+                    tags: apDeathlink ? new[] { "DeathLink" } : Array.Empty<string>(),
                     password: password,
                     requestSlotData: true
                 );
@@ -681,6 +692,7 @@ namespace AtlyssArchipelagoWIP
                     Logger.LogWarning($"[AtlyssAP] Sync packet warning: {ex.Message}");
                 }
                 _session.Items.ItemReceived += OnItemReceived;
+                _dlService.OnDeathLinkReceived += OnDeathLinkReceived;
                 _session.Locations.CheckedLocationsUpdated += (locations) =>
                 {
                     Logger.LogInfo($"[AtlyssAP] Server confirmed {locations.Count} checked location(s)");
@@ -765,6 +777,47 @@ namespace AtlyssArchipelagoWIP
                 Logger.LogError($"[AtlyssAP] Failed to send check: {ex.Message}");
             }
         }
+
+        private void OnDeathLinkReceived(DeathLink dl)
+        {
+            reactingToDeathLink = 2;
+            try
+            {
+                Player localPlayer = Player._mainPlayer;
+                if (localPlayer == null)
+                {
+                    Logger.LogWarning("[AtlyssAP] Player not found for DeathLink! Possibly on Main Menu?");
+                    reactingToDeathLink = 0;
+                    return;
+                }
+                localPlayer._playerZoneType = ZoneType.Field; // if this is set to `Safe`, as it is in Sanctum for example, the player cannot die from anything.
+                localPlayer._statusEntity.Subtract_Health(10000);
+                Logger.LogMessage("[AtlyssAP] DeathLink Received!");
+                string DeathLinkMessage;
+                if (dl.Cause.IsNullOrWhiteSpace())
+                {
+                    DeathLinkMessage = $"Killed by {dl.Source} on Archipelago.";
+                }
+                else
+                {
+                    DeathLinkMessage = $"{dl.Cause}.";
+                }
+                try
+                {
+                    GameObject.Find("_GameUI_InGame").GetComponent<ErrorPromptTextManager>().Init_ErrorPrompt(DeathLinkMessage); // this is that large red text in the top middle of the screen
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError($"[AtlyssAP] Failed to display DeathLink message: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"[AtlyssAP] Failed to process DeathLink: {ex.Message}");
+                reactingToDeathLink = 0;
+            }
+        }
+
 
         private void OnItemReceived(ReceivedItemsHelper helper)
         {
@@ -1208,6 +1261,22 @@ namespace AtlyssArchipelagoWIP
             if (string.IsNullOrWhiteSpace(host))
             {
                 host = "localhost";
+            }
+        }
+
+        public void ToggleDeathLink(bool enabled)
+        {
+            if (_session == null || _dlService == null || !_session.Socket.Connected)
+            {
+                return;
+            }
+            if (enabled)
+            {
+                _dlService.EnableDeathLink();
+            }
+            else
+            {
+                _dlService.DisableDeathLink();
             }
         }
 
