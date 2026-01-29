@@ -168,7 +168,7 @@ namespace AtlyssArchipelagoWIP
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Chat patch error: {ex.Message}");
+                StaticLogger?.LogError($"[AtlyssAP] Chat patch error: {ex.Message}");
                 return true;
             }
         }
@@ -177,6 +177,7 @@ namespace AtlyssArchipelagoWIP
     public class SpikePatch
     {
         [HarmonyPatch(typeof(File), nameof(File.ReadAllText), new Type[] { typeof(string) })]
+        // Redirects Spike's bank loading code to load custom Archipelago item banks.
         public static class File_ReadAllText_Patch
         {
             static bool Prefix(ref string path, ref string __result)
@@ -195,7 +196,7 @@ namespace AtlyssArchipelagoWIP
                         if (File.Exists(apMasterPath))
                         {
                             __result = File.ReadAllText(apMasterPath);
-                            AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Redirected Spike load: MASTER bank -> AP MASTER bank");
+                            StaticLogger?.LogInfo("[AtlyssAP] Redirected Spike load: MASTER bank -> AP MASTER bank");
                             return false;
                         }
                         else
@@ -218,7 +219,7 @@ namespace AtlyssArchipelagoWIP
                                 if (File.Exists(apPath))
                                 {
                                     __result = File.ReadAllText(apPath);
-                                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] Redirected Spike load: bank {i} -> AP bank {i}");
+                                    StaticLogger?.LogInfo($"[AtlyssAP] Redirected Spike load: bank {i} -> AP bank {i}");
                                     return false;
                                 }
                                 else
@@ -234,13 +235,14 @@ namespace AtlyssArchipelagoWIP
                 }
                 catch (Exception ex)
                 {
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Error in File.ReadAllText patch: {ex.Message}");
+                    StaticLogger?.LogError($"[AtlyssAP] Error in File.ReadAllText patch: {ex.Message}");
                     return true;
                 }
             }
         }
 
         [HarmonyPatch(typeof(File), nameof(File.WriteAllText), new Type[] { typeof(string), typeof(string) })]
+        // Redirects Spike's bank saving code to save to custom Archipelago item banks.
         public static class File_WriteAllText_Patch
         {
             static bool Prefix(ref string path, string contents)
@@ -262,7 +264,7 @@ namespace AtlyssArchipelagoWIP
                         }
 
                         File.WriteAllText(apMasterPath, contents);
-                        AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Redirected Spike save: MASTER bank -> AP MASTER bank");
+                        StaticLogger?.LogInfo("[AtlyssAP] Redirected Spike save: MASTER bank -> AP MASTER bank");
                         return false;
                     }
 
@@ -276,7 +278,7 @@ namespace AtlyssArchipelagoWIP
                             {
                                 string apPath = ArchipelagoSpikeStorage.GetAPBankPath(i);
                                 File.WriteAllText(apPath, contents);
-                                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] Redirected Spike save: bank {i} -> AP bank {i}");
+                                StaticLogger?.LogInfo($"[AtlyssAP] Redirected Spike save: bank {i} -> AP bank {i}");
                                 return false;
                             }
                         }
@@ -286,7 +288,7 @@ namespace AtlyssArchipelagoWIP
                 }
                 catch (Exception ex)
                 {
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Error in File.WriteAllText patch: {ex.Message}");
+                    StaticLogger?.LogError($"[AtlyssAP] Error in File.WriteAllText patch: {ex.Message}");
                     return true;
                 }
             }
@@ -299,17 +301,17 @@ namespace AtlyssArchipelagoWIP
                 if (!ArchipelagoSpikeStorage.AreAPBanksInitialized())
                 {
                     ArchipelagoSpikeStorage.InitializeAPBanks();
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Initialized AP Spike storage (separate from vanilla)");
+                    StaticLogger?.LogInfo("[AtlyssAP] Initialized AP Spike storage (separate from vanilla)");
                 }
                 else
                 {
                     int itemCount = ArchipelagoSpikeStorage.GetTotalItemCount();
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] AP Spike storage loaded ({itemCount} items stored)");
+                    StaticLogger?.LogInfo($"[AtlyssAP] AP Spike storage loaded ({itemCount} items stored)");
                 }
             }
             catch (Exception ex)
             {
-                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to initialize AP storage: {ex.Message}");
+                StaticLogger?.LogError($"[AtlyssAP] Failed to initialize AP storage: {ex.Message}");
             }
         }
     }
