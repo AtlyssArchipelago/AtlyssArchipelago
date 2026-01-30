@@ -44,6 +44,7 @@ namespace AtlyssArchipelagoWIP
         private ArchipelagoSession _session;
         public bool connected;
         private bool connecting;
+        private Dictionary<string, object> slotData = new Dictionary<string, object>();
 
         public DeathLinkService _dlService;
         public static int reactingToDeathLink;
@@ -613,7 +614,7 @@ namespace AtlyssArchipelagoWIP
                     LoginSuccessful loginSuccess = login as LoginSuccessful;
                     if (loginSuccess != null && loginSuccess.SlotData != null)
                     {
-                        var slotData = loginSuccess.SlotData;
+                        slotData = loginSuccess.SlotData;
                         if (slotData.ContainsKey("goal"))
                         {
                             goalOption = Convert.ToInt32(slotData["goal"]);
@@ -692,6 +693,7 @@ namespace AtlyssArchipelagoWIP
                     Logger.LogWarning($"[AtlyssAP] Sync packet warning: {ex.Message}");
                 }
                 _session.Items.ItemReceived += OnItemReceived;
+                _session.Socket.PacketReceived += OnPacketReceived;
                 _dlService.OnDeathLinkReceived += OnDeathLinkReceived;
                 _session.Locations.CheckedLocationsUpdated += (locations) =>
                 {
@@ -1141,12 +1143,8 @@ namespace AtlyssArchipelagoWIP
         {
             try
             {
-
-                _session.Socket.SendPacketAsync(new StatusUpdatePacket
-                {
-                    Status = ArchipelagoClientState.ClientGoal
-                });
-                SendAPChatMessage("<color=yellow>Release command sent!</color>");
+                _session.Say("!release");
+                SendAPChatMessage("<color=yellow>Release requested!</color>");
                 Logger.LogInfo("[AtlyssAP] Release command executed");
             }
             catch (Exception ex)
@@ -1159,13 +1157,14 @@ namespace AtlyssArchipelagoWIP
         {
             try
             {
-
-                SendAPChatMessage("<color=yellow>Checking for new items...</color>");
+                _session.Say("!collect");
+                SendAPChatMessage("<color=yellow>Collect requested!</color>");
                 Logger.LogInfo("[AtlyssAP] Collect command executed");
             }
             catch (Exception ex)
             {
                 Logger.LogError($"[AtlyssAP] Failed to execute collect: {ex.Message}");
+                SendAPChatMessage("<color=red>Failed to execute collect</color>");
             }
         }
         private void HandleHintCommand(string args)
@@ -1179,9 +1178,8 @@ namespace AtlyssArchipelagoWIP
                 }
 
                 SendAPChatMessage($"<color=yellow>Requesting hint for: {args}</color>");
+                _session.Say($"!hint {args}");
                 Logger.LogInfo($"[AtlyssAP] Hint requested for: {args}");
-
-                SendAPChatMessage("<color=yellow>Hint system not yet fully implemented</color>");
             }
             catch (Exception ex)
             {
@@ -1192,8 +1190,8 @@ namespace AtlyssArchipelagoWIP
         {
             SendAPChatMessage("<color=yellow>Archipelago Commands:</color>");
             SendAPChatMessage("/release - Release remaining items");
-            SendAPChatMessage("/collect - Check for new items");
-            SendAPChatMessage("/hint [item] - Request hint (WIP)");
+            SendAPChatMessage("/collect - Collect items from others");
+            SendAPChatMessage("/hint [item] - Request hint");
             SendAPChatMessage("/players - List connected players");
             SendAPChatMessage("/status - Show completion status");
             SendAPChatMessage("/help - Show this message");
@@ -1243,6 +1241,41 @@ namespace AtlyssArchipelagoWIP
                 Logger.LogError($"[AtlyssAP] Failed to show status: {ex.Message}");
             }
         }
+
+        private void OnPacketReceived(ArchipelagoPacketBase packet)
+        {
+            if (packet is PrintJsonPacket && !(packet is ItemPrintJsonPacket) && !(packet is HintPrintJsonPacket))
+            {
+                SendAPChatMessage($"{packet.ToJObject().SelectToken("data[0].text")?.Value<string>()}");
+            }
+            else if (packet is HintPrintJsonPacket)
+            {
+                string combinedMessage;
+                if (packet.ToJObject()["receiving"].ToObject<int>() == _session.Players.ActivePlayer.Slot) // if the receiving player is us...
+                {
+                    var NetItem = packet.ToJObject()["item"].ToObject<NetworkItem>(); // Get the item data from the hint
+                    var playerSending = _session.Players.GetPlayerInfo(NetItem.Player).Alias; // Find the finding player's slot alias
+                    var itemReceiving = _session.Items.GetItemName(NetItem.Item); // Get the item's name
+                    var findingLocation = _session.Locations.GetLocationNameFromId(NetItem.Location, _session.Players.GetPlayerInfo(NetItem.Player).Game); // Get the location's name
+                    combinedMessage = $"Your <color=yellow>{itemReceiving}</color> is at <color=yellow>{findingLocation}</color> in <color=#00FFFF>{playerSending}'s</color> world.";
+                    SendAPChatMessage(combinedMessage);
+                }
+                else if (packet.ToJObject()["item"].ToObject<NetworkItem>().Player == _session.Players.ActivePlayer.Slot) // if the sending player is us...
+                {
+                    var NetItem = packet.ToJObject()["item"].ToObject<NetworkItem>(); // Get the item data
+                    var playerReceiving = _session.Players.GetPlayerInfo(NetItem.Player).Alias; // Find the receiving player's slot alias
+                    var itemSending = _session.Items.GetItemName(NetItem.Item, _session.Players.GetPlayerInfo(NetItem.Player).Game); // Get the item's name
+                    var findingLocation = _session.Locations.GetLocationNameFromId(NetItem.Location); // Get the location's name
+                    combinedMessage = $"<color=#00FFFF>{playerReceiving}'s</color> <color=yellow>{itemSending}</color> is at your <color=yellow>{findingLocation}</color>";
+                    SendAPChatMessage(combinedMessage);
+                }
+                else // ap should prevent this, but it's better to be prepared
+                {
+                    Logger.LogWarning($"[AtlyssAP] Received a hint for a different player. Ignoring.");
+                }
+            }
+        }
+
         private static void ParseServer(string raw, int fallbackPort, out string host, out int port)
         {   // >>> IDEA: We're not using this anymore, since the new in-game UI combines host/port already. Remove? <<<
             host = (raw ?? "localhost").Trim();
