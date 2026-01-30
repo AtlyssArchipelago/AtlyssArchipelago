@@ -653,7 +653,7 @@ namespace AtlyssArchipelagoWIP
                     "Your goal: <color=red>Defeat Valdur</color>",
                     "Your goal: <color=red>Defeat All Bosses</color>",
                     "Your goal: <color=yellow>Complete All Quests</color>",
-                    "Your goal: <color=cyan>Reach Level 32</color>"
+                    "Your goal: <color=#00FFFF>Reach Level 32</color>"
                 };
                 if (goalOption >= 0 && goalOption < goalMessages.Length)
                 {
@@ -853,12 +853,12 @@ namespace AtlyssArchipelagoWIP
                     if (areaAccessOption == 0) // Locked mode
                     {
                         portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
-                        SendAPChatMessage("<color=cyan>Catacombs portal unlocked!</color>");
+                        SendAPChatMessage("<color=#00FFFF>Catacombs portal unlocked!</color>");
                     }
                     else if (areaAccessOption == 2) // Progressive mode
                     {
                         portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
-                        SendAPChatMessage("<color=cyan>Catacombs portal unlocked!</color>");
+                        SendAPChatMessage("<color=#00FFFF>Catacombs portal unlocked!</color>");
                         portalLocker.CheckProgressiveUnlock();
                     }
                     return;
@@ -871,12 +871,12 @@ namespace AtlyssArchipelagoWIP
                     if (areaAccessOption == 0) // Locked mode
                     {
                         portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
-                        SendAPChatMessage("<color=cyan>Grove portal unlocked!</color>");
+                        SendAPChatMessage("<color=#00FFFF>Grove portal unlocked!</color>");
                     }
                     else if (areaAccessOption == 2) // Progressive mode
                     {
                         portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
-                        SendAPChatMessage("<color=cyan>Grove portal unlocked!</color>");
+                        SendAPChatMessage("<color=#00FFFF>Grove portal unlocked!</color>");
                         portalLocker.CheckProgressiveUnlock();
                     }
                     return;

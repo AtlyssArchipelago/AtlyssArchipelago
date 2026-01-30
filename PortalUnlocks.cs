@@ -410,7 +410,7 @@ namespace AtlyssArchipelagoWIP
             if (basePlugin._catacombsPortalReceived && basePlugin._grovePortalReceived)
             {
                 UnblockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
-                basePlugin.SendAPChatMessage("<color=cyan>Both portals found - Grove unlocked!</color>");
+                basePlugin.SendAPChatMessage("<color=#00FFFF>Both portals found - Grove unlocked!</color>");
             }
             else if (basePlugin._grovePortalReceived && !basePlugin._catacombsPortalReceived)
             {
@@ -474,7 +474,7 @@ namespace AtlyssArchipelagoWIP
             {
                 StaticLogger.LogInfo("[AtlyssAP] Area Access: Unlocked - Opening all areas");
                 lockedScenes.Clear();
-                basePlugin.SendAPChatMessage("<color=cyan>All areas unlocked!</color>");
+                basePlugin.SendAPChatMessage("<color=#00FFFF>All areas unlocked!</color>");
             }
             else if (basePlugin.areaAccessOption == 0)
             {
