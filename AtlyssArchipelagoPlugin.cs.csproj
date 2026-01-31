@@ -318,7 +318,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="APHarmonyPatches.cs" />
-	<Compile Include="SpikeStorage.cs" />
+    <Compile Include="ShopSanity.cs" />
+    <Compile Include="SpikeStorage.cs" />
     <Compile Include="AtlyssArchipelagoPlugin.cs" />
     <Compile Include="PortalUnlocks.cs" />
   </ItemGroup>

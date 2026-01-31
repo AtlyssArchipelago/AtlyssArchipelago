@@ -1275,28 +1275,6 @@ namespace AtlyssArchipelagoWIP
                 }
             }
         }
-
-        private static void ParseServer(string raw, int fallbackPort, out string host, out int port)
-        {   // >>> IDEA: We're not using this anymore, since the new in-game UI combines host/port already. Remove? <<<
-            host = (raw ?? "localhost").Trim();
-            port = fallbackPort;
-            int colonIndex = host.LastIndexOf(':');
-            if (colonIndex > 0 && colonIndex < host.Length - 1)
-            {
-                string maybeHost = host.Substring(0, colonIndex);
-                string maybePort = host.Substring(colonIndex + 1);
-                if (int.TryParse(maybePort, out int parsedPort))
-                {
-                    host = maybeHost;
-                    port = parsedPort;
-                }
-            }
-            if (string.IsNullOrWhiteSpace(host))
-            {
-                host = "localhost";
-            }
-        }
-
         public void ToggleDeathLink(bool enabled)
         {
             if (_session == null || _dlService == null || !_session.Socket.Connected)
