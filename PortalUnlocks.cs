@@ -9,13 +9,16 @@ namespace AtlyssArchipelagoWIP
     public class PortalUnlocks : MonoBehaviour
     {
         private AtlyssArchipelagoPlugin basePlugin;
+
         private struct PortalData // What the portal's scene data was before we overwrote it. Used to restore data later.
         {
             public string portalCaption; // equates to GameObject.Portal.ScenePortalData._portalCaptionTitle
             public string spawnID; // equates to GameObject.Portal.ScenePortalData._spawnPointTag
             public string sceneName; // equates to GameObject.Portal.ScenePortalData._subScene
         }
+
         private List<string> lockedScenes = new List<string>();
+
         private Dictionary<PortalData, PortalData> PortalDataToLockedData = new Dictionary<PortalData, PortalData>() // a list of every basegame portal, and what data it should have when locked.
         {   
             // Here's a formatting example:
@@ -404,26 +407,12 @@ namespace AtlyssArchipelagoWIP
             StartCoroutine(EnforcePortalLocks(s));
         }
 
-        public void CheckProgressiveUnlock()
-        {
-            if (basePlugin.areaAccessOption != 2) return;
-            if (basePlugin._catacombsPortalReceived && basePlugin._grovePortalReceived)
-            {
-                UnblockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
-                basePlugin.SendAPChatMessage("<color=#00FFFF>Both portals found - Grove unlocked!</color>");
-            }
-            else if (basePlugin._grovePortalReceived && !basePlugin._catacombsPortalReceived)
-            {
-                basePlugin.SendAPChatMessage("Grove portal found, but need <color=yellow>Catacombs portal</color> first!");
-            }
-        }
-
         private IEnumerator EnforcePortalLocks(Scene newScene)
         {
             if (!basePlugin.connected || newScene.name == "map_dungeon00_sanctumCatacombs" || newScene.name == "map_dungeon01_crescentGrove")
             {
                 yield break; // we're not connected, so we don't know what to lock.
-                // >>> IDEA: Could possibly default to all areas locked to avoid breaking logic? <<<
+                // >>> IDEA: Could possibly default to all areas locked to avoid breaking logic? <
             }
             yield return new WaitUntil(() => newScene.isLoaded); // wait for the scene to finish loading, just in case
             yield return new WaitForSecondsRealtime(2); // plus a little to avoid race conditions
@@ -463,42 +452,77 @@ namespace AtlyssArchipelagoWIP
                     {
                         StaticLogger.LogError($"[AtlyssAP] The portal to {portalData._portalCaptionTitle} wasn't found in the dictionary!");
                     }
-                    
                 }
             }
         }
 
+        // UPDATED: Now locks all 11 portal scenes based on area access mode
         public void ApplyAreaAccessMode()
         {
-            if (basePlugin.areaAccessOption == 1)
+            if (basePlugin.areaAccessOption == 1) // Unlocked
             {
                 StaticLogger.LogInfo("[AtlyssAP] Area Access: Unlocked - Opening all areas");
                 lockedScenes.Clear();
                 basePlugin.SendAPChatMessage("<color=#00FFFF>All areas unlocked!</color>");
             }
-            else if (basePlugin.areaAccessOption == 0)
+            else if (basePlugin.areaAccessOption == 0) // Locked - all 11 portals required independently
             {
-                StaticLogger.LogInfo("[AtlyssAP] Area Access: Locked - Portals must be found");
+                StaticLogger.LogInfo("[AtlyssAP] Area Access: Locked - All 11 portals required");
+
+                // Lock all 11 portal scenes
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity");
                 BlockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentKeep.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity");
                 BlockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
             }
-            else if (basePlugin.areaAccessOption == 2)
+            else if (basePlugin.areaAccessOption == 2) // Progressive - portals unlock in sequence
             {
-                StaticLogger.LogInfo("[AtlyssAP] Area Access: Progressive - Portals unlock sequentially");
+                StaticLogger.LogInfo("[AtlyssAP] Area Access: Progressive - Portals unlock in sequence");
+
+                // Lock all 11 portal scenes (will unlock progressively as portals are received)
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity");
                 BlockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentKeep.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity");
                 BlockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity");
             }
         }
+
         public void BlockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
         {
-            lockedScenes.Add(sceneName);
-            StaticLogger.LogInfo($"[AtlyssAP] {sceneName} has been locked by Archipelago");
+            if (!lockedScenes.Contains(sceneName))
+            {
+                lockedScenes.Add(sceneName);
+                StaticLogger.LogInfo($"[AtlyssAP] {sceneName} has been locked by Archipelago");
+            }
         }
 
         public void UnblockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
         {
-            lockedScenes.Remove(sceneName);
-            StaticLogger.LogInfo($"[AtlyssAP] {sceneName} is no longer being locked by Archipelago");
+            if (lockedScenes.Contains(sceneName))
+            {
+                lockedScenes.Remove(sceneName);
+                StaticLogger.LogInfo($"[AtlyssAP] {sceneName} is no longer being locked by Archipelago");
+            }
+        }
+
+        // NEW: Check if a scene is currently locked (used by progressive unlock system)
+        public bool IsSceneLocked(string sceneName)
+        {
+            return lockedScenes.Contains(sceneName);
         }
     }
 }

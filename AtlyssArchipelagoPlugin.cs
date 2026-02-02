@@ -11,17 +11,18 @@ using System;
 using System.IO;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
 using Archipelago.MultiClient.Net.BounceFeatures.DeathLink;
 using Newtonsoft.Json.Linq;
+
 namespace AtlyssArchipelagoWIP
 {
     [BepInPlugin("com.azrael.atlyss.ap", "Atlyss Archipelago", "1.3.1")]
     public class AtlyssArchipelagoPlugin : BaseUnityPlugin
     {
-
         public static AtlyssArchipelagoPlugin Instance { get; private set; }
         public static ManualLogSource StaticLogger { get; private set; }
         private static Harmony _harmony;
@@ -53,8 +54,57 @@ namespace AtlyssArchipelagoWIP
         public int areaAccessOption = 0;
         private bool shopSanityEnabled = false;
 
-        public bool _catacombsPortalReceived = false;
-        public bool _grovePortalReceived = false;
+        // UPDATED: Expanded from 2 portals to 11 portals with dictionary tracking
+        private Dictionary<string, bool> _portalItemsReceived = new Dictionary<string, bool>
+        {
+            { "Outer Sanctum Portal", false },
+            { "Effold Terrace Portal", false },
+            { "Arcwood Pass Portal", false },
+            { "Tull Valley Portal", false },
+            { "Crescent Road Portal", false },
+            { "Catacombs Portal", false },
+            { "Luvora Garden Portal", false },
+            { "Crescent Keep Portal", false },
+            { "Tull Enclave Portal", false },
+            { "Bularr Fortress Portal", false },
+            { "Grove Portal", false },
+        };
+
+        // NEW: Maps portal item names to their scene paths
+        private Dictionary<string, string> _portalScenes = new Dictionary<string, string>
+        {
+            { "Outer Sanctum Portal", "Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity" },
+            { "Effold Terrace Portal", "Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity" },
+            { "Arcwood Pass Portal", "Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity" },
+            { "Tull Valley Portal", "Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity" },
+            { "Crescent Road Portal", "Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity" },
+            { "Catacombs Portal", "Assets/Scenes/map_dungeon00_sanctumCatacombs.unity" },
+            { "Luvora Garden Portal", "Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity" },
+            { "Crescent Keep Portal", "Assets/Scenes/00_zone_forest/_zone00_crescentKeep.unity" },
+            { "Tull Enclave Portal", "Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity" },
+            { "Bularr Fortress Portal", "Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity" },
+            { "Grove Portal", "Assets/Scenes/map_dungeon01_crescentGrove.unity" },
+        };
+
+        // NEW: Progressive unlock order (matches Python regions.py)
+        private List<string> _progressivePortalOrder = new List<string>
+        {
+            "Outer Sanctum Portal",
+            "Arcwood Pass Portal",
+            "Catacombs Portal",
+            "Effold Terrace Portal",
+            "Tull Valley Portal",
+            "Crescent Road Portal",
+            "Luvora Garden Portal",
+            "Crescent Keep Portal",
+            "Tull Enclave Portal",
+            "Grove Portal",
+            "Bularr Fortress Portal",
+        };
+
+        // NEW: Shop sanity system (50 locations across 10 merchants)
+        public ArchipelagoShopSanity _shopSanity;
+
         private readonly HashSet<long> _reportedChecks = new HashSet<long>();
 
         private int _lastLevel = 0;
@@ -75,12 +125,10 @@ namespace AtlyssArchipelagoWIP
 
         private static readonly Dictionary<string, long> AllQuestToLocation = new Dictionary<string, long>
         {
-
             { "Diva Must Die", DEFEAT_SLIME_DIVA },
             { "The Voice of Zuulneruda", DEFEAT_LORD_ZUULNERUDA },
             { "Gatling Galius", DEFEAT_GALIUS },
             { "The Colosseum", DEFEAT_COLOSSUS },
-
 
             { "A Warm Welcome", BASE_LOCATION_ID + 30 },
             { "Communing Catacombs", BASE_LOCATION_ID + 31 },
@@ -92,15 +140,12 @@ namespace AtlyssArchipelagoWIP
             { "Ridding Slimes", BASE_LOCATION_ID + 104 },
             { "Summons' Spectral Powder!", BASE_LOCATION_ID + 105 },
 
-
             { "Call of Fury", BASE_LOCATION_ID + 110 },
             { "Cold Shoulder", BASE_LOCATION_ID + 111 },
             { "Focusin' in", BASE_LOCATION_ID + 112 },
 
-
             { "Cleansing Terrace", BASE_LOCATION_ID + 115 },
             { "Huntin' Hogs", BASE_LOCATION_ID + 116 },
-
 
             { "Ambente Ingots", BASE_LOCATION_ID + 120 },
             { "Makin' a Mekspear", BASE_LOCATION_ID + 121 },
@@ -109,13 +154,11 @@ namespace AtlyssArchipelagoWIP
             { "Battlecage Rage", BASE_LOCATION_ID + 124 },
             { "Ancient Beings", BASE_LOCATION_ID + 125 },
 
-
             { "Makin' a Vile Blade", BASE_LOCATION_ID + 130 },
             { "Makin' a Wizwand", BASE_LOCATION_ID + 131 },
             { "Makin' More Vile Blades", BASE_LOCATION_ID + 132 },
             { "Makin' More Wizwands", BASE_LOCATION_ID + 133 },
             { "Sapphite Ingots", BASE_LOCATION_ID + 134 },
-
 
             { "Devious Pact", BASE_LOCATION_ID + 140 },
             { "Disciple of Magic", BASE_LOCATION_ID + 141 },
@@ -125,7 +168,6 @@ namespace AtlyssArchipelagoWIP
             { "Strength and Honor", BASE_LOCATION_ID + 145 },
             { "Wicked Wizbars", BASE_LOCATION_ID + 146 },
 
-
             { "Reckoning Foes", BASE_LOCATION_ID + 150 },
             { "Blossom of Life", BASE_LOCATION_ID + 151 },
             { "Consumed Madness", BASE_LOCATION_ID + 152 },
@@ -134,11 +176,9 @@ namespace AtlyssArchipelagoWIP
             { "Canmore' Golem Chestpieces", BASE_LOCATION_ID + 155 },
             { "Whatta' Rush!", BASE_LOCATION_ID + 156 },
 
-
             { "Finding Armagorn", BASE_LOCATION_ID + 160 },
             { "Reviling_the_Rageboars", BASE_LOCATION_ID + 161 },
             { "Reviling the Ragebears", BASE_LOCATION_ID + 162 },
-
 
             { "Makin' a Ragespear", BASE_LOCATION_ID + 165 },
             { "Makin' More Ragespears", BASE_LOCATION_ID + 166 },
@@ -147,13 +187,10 @@ namespace AtlyssArchipelagoWIP
             { "Tethering Grove", BASE_LOCATION_ID + 169 },
             { "Up and Over It", BASE_LOCATION_ID + 170 },
 
-
             { "Makin' a Monolith Chestpiece", BASE_LOCATION_ID + 175 },
             { "Summons' Monolith Chestpieces", BASE_LOCATION_ID + 176 },
 
-
             { "Facing Foes", BASE_LOCATION_ID + 180 },
-
 
             { "Cleansing the Grove", BASE_LOCATION_ID + 200 },
             { "Hell In The Grove", BASE_LOCATION_ID + 201 },
@@ -163,9 +200,7 @@ namespace AtlyssArchipelagoWIP
             { "Nulversa, Greenveras!", BASE_LOCATION_ID + 205 },
             { "Summon' Firebreath Blades", BASE_LOCATION_ID + 206 },
 
-
             { "The Gall of Galius", BASE_LOCATION_ID + 220 },
-
 
             { "Makin' a Follycannon", BASE_LOCATION_ID + 240 },
             { "Makin' More Follycannons", BASE_LOCATION_ID + 241 },
@@ -174,7 +209,6 @@ namespace AtlyssArchipelagoWIP
 
         private static readonly Dictionary<long, string> LocationIdToName = new Dictionary<long, string>
         {
-
             { 591010, "Reach Level 2" },
             { 591011, "Reach Level 4" },
             { 591012, "Reach Level 6" },
@@ -192,7 +226,6 @@ namespace AtlyssArchipelagoWIP
             { 591024, "Reach Level 30" },
             { 591025, "Reach Level 32" },
 
-
             { 591001, "Defeat Slime Diva" },
             { 591002, "Defeat Lord Zuulneruda" },
             { 591003, "Defeat Galius" },
@@ -207,25 +240,22 @@ namespace AtlyssArchipelagoWIP
 
         // Removed: 6 class tomes from item pool (Fighter, Mystic, Bandit, Paladin, Magus, Bishop)
         // Removed: 9 skill scrolls from item pool (Alacrity, Sturdy, Fira, Crya, Str/Dex/Mind Mastery, Taunt, Curis)
-        // New item count: 191 items (was 206)
+        // UPDATED: Now includes 139 trade items (monster drops, ores, fish, special items)
+        // New total: 261 items (was 191)
         private static readonly Dictionary<string, string> ItemNameMapping = new Dictionary<string, string>
         {
-
-
+            // Consumables
             { "Bunbag Pack", "(lv-0) STATUSCONSUMABLE_Bunbag" },
             { "Bunjar Pack", "(lv-0) STATUSCONSUMABLE_Bunjar" },
             { "Bunpot Pack", "(lv-0) STATUSCONSUMABLE_Bunpot" },
             { "Regen Potion Pack", "(lv-10) STATUSCONSUMABLE_Regen Potion" },
             { "Regen Vial Pack", "(lv-0) STATUSCONSUMABLE_Regen Vial" },
 
-
             { "Magiclove Pack", "(lv-0) STATUSCONSUMABLE_Magiclove" },
             { "Magiflower Pack", "(lv-0) STATUSCONSUMABLE_Magiflower" },
             { "Magileaf Pack", "(lv-0) STATUSCONSUMABLE_Magileaf" },
 
-
             { "Stamstar Pack", "(lv-0) STATUSCONSUMABLE_Stamstar" },
-
 
             { "Agility Potion Pack", "(lv-10) STATUSCONSUMABLE_Agility Potion" },
             { "Agility Vial Pack", "(lv-0) STATUSCONSUMABLE_Agility Vial" },
@@ -234,22 +264,21 @@ namespace AtlyssArchipelagoWIP
             { "Wisdom Potion Pack", "(lv-10) STATUSCONSUMABLE_Wisdom Potion" },
             { "Wisdom Vial Pack", "(lv-0) STATUSCONSUMABLE_Wisdom Vial" },
 
-
             { "Tome of Greater Experience", "(lv-0) STATUSCONSUMABLE_Tome of Greater Experience" },
             { "Tome of Experience", "(lv-0) STATUSCONSUMABLE_Tome of Experience" },
             { "Tome of Lesser Experience", "(lv-0) STATUSCONSUMABLE_Tome of Lesser Experience" },
-
 
             { "Carrot Cake Pack", "(lv-0) STATUSCONSUMABLE_Carrot Cake" },
             { "Minchroom Juice Pack", "(lv-0) STATUSCONSUMABLE_Minchroom Juice" },
             { "Spectral Powder Pack", "(lv-0) STATUSCONSUMABLE_Spectral Powder" },
 
+            // Trade Items - Badges
             { "Geistlord Badge Pack", "TRADEITEM_Geistlord Badge" },
             { "Coldgeist Badge Pack", "TRADEITEM_Coldgeist Badge" },
             { "Earthcore Badge Pack", "TRADEITEM_Earthcore Badge" },
             { "Windcore Badge Pack", "TRADEITEM_Windcore Badge" },
 
-
+            // Trade Items - Clusters/Ingots (existing)
             { "Iron Cluster Pack", "TRADEITEM_Iron Cluster" },
             { "Copper Cluster Pack", "TRADEITEM_Copper Cluster" },
             { "Mithril Cluster Pack", "TRADEITEM_Mithril Cluster" },
@@ -257,16 +286,15 @@ namespace AtlyssArchipelagoWIP
             { "Sapphite Ingot Pack", "TRADEITEM_Sapphite Ingot" },
             { "Amberite Ingot Pack", "TRADEITEM_Amberite Ingot" },
 
-
             { "Soul Pearl", "TRADEITEM_Soul Pearl" },
             { "Experience Bond Pack", "TRADEITEM_Experience Bond" },
 
+            // Weapons
             { "Wood Sword", "(lv-1) WEAPON_Wood Sword (Sword, Strength)" },
             { "Wooden Bow", "(lv-1) WEAPON_Wooden Bow (Bow, Dexterity)" },
             { "Wood Scepter", "(lv-1) WEAPON_Wood Scepter (Scepter, Mind)" },
             { "Crypt Blade", "(lv-2) WEAPON_Crypt Blade (Sword, Strength)" },
             { "Slimecrust Blade", "(lv-2) WEAPON_Slimecrust Blade (Sword, Strength)" },
-
 
             { "Gilded Sword", "(lv-4) WEAPON_Gilded Sword (Sword, Strength)" },
             { "Mini Geist Scythe", "(lv-4) WEAPON_Mini Geist Scythe (Greatblade, Strength)" },
@@ -275,39 +303,33 @@ namespace AtlyssArchipelagoWIP
             { "Dense Hammer", "(lv-6) WEAPON_Dense Hammer (Hammer, Strength)" },
             { "Dense Katars", "(lv-6) WEAPON_Dense Katars (Katars, Dexterity)" },
 
-
             { "Vile Blade", "(lv-8) WEAPON_Vile Blade (Sword, Strength)" },
             { "Mekspear", "(lv-8) WEAPON_Mekspear (Polearm, Strength)" },
             { "Menace Bow", "(lv-8) WEAPON_Menace Bow (Bow, Dexterity)" },
             { "Cryptcall Bell", "(lv-8) WEAPON_Cryptcall Bell (Magic Bell, Mind)" },
-
 
             { "Wizwand", "(lv-12) WEAPON_Wizwand (Scepter, Mind)" },
             { "Amberite Sword", "(lv-12) WEAPON_Amberite Sword (Sword, Strength)" },
             { "Geistlord Claws", "(lv-12) WEAPON_Geistlord Claws (Katars, Dexterity)" },
             { "Petrified Bow", "(lv-12) WEAPON_Petrified Bow (Bow, Dexterity)" },
 
-
             { "Mithril Sword", "(lv-16) WEAPON_Mithril Sword (Sword, Strength)" },
             { "Mithril Bow", "(lv-14) WEAPON_Mithril Bow (Bow, Dexterity)" },
             { "Ragespear", "(lv-16) WEAPON_Ragespear (Polearm, Strength)" },
             { "Coldgeist Blade", "(lv-16) WEAPON_Coldgeist Blade (Sword, Strength)" },
 
-
             { "Sapphite Spear", "(lv-18) WEAPON_Sapphite Spear (Polearm, Strength)" },
             { "Colossus Tone", "(lv-18) WEAPON_Colossus Tone (Magic Bell, Mind)" },
             { "Magitek Burstgun", "(lv-20) WEAPON_Magitek Burstgun (Shotgun, Dexterity)" },
-
 
             { "Firebreath Blade", "(lv-22) WEAPON_Firebreath Blade (Sword, Strength)" },
             { "Valdur Blade", "(lv-24) WEAPON_Valdur Blade (Sword, Strength)" },
             { "Torrentius Longbow", "(lv-24) WEAPON_Torrentius Longbow (Bow, Dexterity)" },
 
-
             { "Follycannon", "(lv-26) WEAPON_Follycannon (Shotgun, Dexterity)" },
             { "Fier Blade", "(lv-26) WEAPON_Fier Blade (Sword, Strength)" },
 
-
+            // Armor - Helms
             { "Leather Cap", "(lv-1) HELM_Leather Cap" },
             { "Fishin Hat", "(lv-1) HELM_Fishin Hat" },
             { "Iron Halo", "(lv-6) HELM_Iron Halo" },
@@ -320,7 +342,7 @@ namespace AtlyssArchipelagoWIP
             { "Wizlad Hood", "(lv-24) HELM_Wizlad Hood" },
             { "Deathknight Helm", "(lv-24) HELM_Deathknight Helm" },
 
-
+            // Armor - Chestpieces
             { "Leather Top", "(lv-1) CHESTPIECE_Leather Top" },
             { "Noble Shirt", "(lv-1) CHESTPIECE_Noble Shirt" },
             { "Iron Chestpiece", "(lv-6) CHESTPIECE_Iron Chestpiece" },
@@ -334,7 +356,7 @@ namespace AtlyssArchipelagoWIP
             { "Wizlad Robe", "(lv-24) CHESTPIECE_Wizlad Robe" },
             { "Executioner Vestment", "(lv-24) CHESTPIECE_Executioner Vestment" },
 
-
+            // Armor - Leggings
             { "Leather Britches", "(lv-1) LEGGINGS_Leather Britches" },
             { "Dense Leggings", "(lv-6) LEGGINGS_Dense Leggings" },
             { "Amberite Leggings", "(lv-12) LEGGINGS_Amberite Leggings" },
@@ -344,7 +366,7 @@ namespace AtlyssArchipelagoWIP
             { "Berserker Leggings", "(lv-18) LEGGINGS_Berserker Leggings" },
             { "Executioner Leggings", "(lv-24) LEGGINGS_Executioner Leggings" },
 
-
+            // Accessories - Capes
             { "Initiate Cloak", "(lv-4) CAPE_Initiate Cloak" },
             { "Nokket Cloak", "(lv-6) CAPE_Nokket Cloak" },
             { "Regazuul Cape", "(lv-10) CAPE_Regazuul Cape" },
@@ -352,14 +374,14 @@ namespace AtlyssArchipelagoWIP
             { "Nulversa Cape", "(lv-20) CAPE_Nulversa Cape" },
             { "Windgolem Cloak", "(lv-22) CAPE_Windgolem Cloak" },
 
-
+            // Accessories - Shields
             { "Wooden Shield", "(lv-1) SHIELD_Wooden Shield" },
             { "Iron Shield", "(lv-6) SHIELD_Iron Shield" },
             { "Dense Shield", "(lv-6) SHIELD_Dense Shield" },
             { "Amberite Shield", "(lv-12) SHIELD_Amberite Shield" },
             { "Sapphite Shield", "(lv-18) SHIELD_Sapphite Shield" },
 
-
+            // Accessories - Rings
             { "Old Ring", "(lv-1) RING_Old Ring" },
             { "Ring Of Ambition", "(lv-1) RING_Ring Of Ambition" },
             { "Sapphireweave Ring", "(lv-6) RING_Sapphireweave Ring" },
@@ -368,7 +390,97 @@ namespace AtlyssArchipelagoWIP
             { "Geistlord Ring", "(lv-12) RING_Geistlord Ring" },
             { "Geistlord Band", "(lv-16) RING_Geistlord Band" },
             { "Valor Ring", "(lv-16) RING_Valor Ring" },
-            { "Valdur Effigy", "(lv-24) RING_Valdur Effigy" }
+            { "Valdur Effigy", "(lv-24) RING_Valdur Effigy" },
+
+            // NEW: Trade Items - Monster Drops (139 items added)
+            { "Aqua Muchroom Cap", "TRADEITEM_Aqua Muchroom Cap" },
+            { "Barknaught Face", "TRADEITEM_Barknaught Face" },
+            { "Blightwood Log", "TRADEITEM_Blightwood Log" },
+            { "Blightwood Stick", "TRADEITEM_Blightwood Stick" },
+            { "Blue Minchroom Cap", "TRADEITEM_Blue Minchroom Cap" },
+            { "Boomboar Gear", "TRADEITEM_Boomboar Gear" },
+            { "Boomboar Head", "TRADEITEM_Boomboar Head" },
+            { "Boomboar Pouch", "TRADEITEM_Boomboar Pouch" },
+            { "Burnrose", "TRADEITEM_Burnrose" },
+            { "Carbuncle Foot", "TRADEITEM_Carbuncle Foot" },
+            { "Cursed Note", "TRADEITEM_Cursed Note" },
+            { "Deadwood Log", "TRADEITEM_Deadwood Log" },
+            { "Deathgel Core", "TRADEITEM_Deathgel Core" },
+            { "Deathknight Gauntlet", "TRADEITEM_Deathknight Gauntlet" },
+            { "Demigolem Core", "TRADEITEM_Demigolem Core" },
+            { "Demigolem Gem", "TRADEITEM_Demigolem Gem" },
+            { "Diva Necklace", "TRADEITEM_Diva Necklace" },
+            { "Firebreath Gland", "TRADEITEM_Firebreath Gland" },
+            { "Fluxfern", "TRADEITEM_Fluxfern" },
+            { "Gale Muchroom Cap", "TRADEITEM_Gale Muchroom Cap" },
+            { "Geist Collar", "TRADEITEM_Geist Collar" },
+            { "Ghostdust", "TRADEITEM_Ghostdust" },
+            { "Golem Core", "TRADEITEM_Golem Core" },
+            { "Golem Gem", "TRADEITEM_Golem Gem" },
+            { "Green Lipstick", "TRADEITEM_Green Lipstick" },
+            { "Hellsludge Core", "TRADEITEM_Hellsludge Core" },
+            { "Maw Eye", "TRADEITEM_Maw Eye" },
+            { "Mekboar Head", "TRADEITEM_Mekboar Head" },
+            { "Mekboar Spear", "TRADEITEM_Mekboar Spear" },
+            { "Mekboar Nail", "TRADEITEM_Mekboar Nail" },
+            { "Mekboar Nosering", "TRADEITEM_Mekboar Nosering" },
+            { "Mekboar Spine", "TRADEITEM_Mekboar Spine" },
+            { "Monolith Core", "TRADEITEM_Monolith Core" },
+            { "Monolith Gem", "TRADEITEM_Monolith Gem" },
+            { "Mouth Bittertooth", "TRADEITEM_Mouth Bittertooth" },
+            { "Mouth Eye", "TRADEITEM_Mouth Eye" },
+            { "Rageboar Head", "TRADEITEM_Rageboar Head" },
+            { "Rageboar Spear", "TRADEITEM_Rageboar Spear" },
+            { "Red Minchroom Cap", "TRADEITEM_Red Minchroom Cap" },
+            { "Rock", "TRADEITEM_Rock" },
+            { "Slime Core", "TRADEITEM_Slime Core" },
+            { "Slime Diva Ears", "TRADEITEM_Slime Diva Ears" },
+            { "Slime Ears", "TRADEITEM_Slime Ears" },
+            { "Slimek Core", "TRADEITEM_Slimek Core" },
+            { "Slimek Ears", "TRADEITEM_Slimek Ears" },
+            { "Slimek Eye", "TRADEITEM_Slimek Eye" },
+            { "Vinethorn", "TRADEITEM_Vinethorn" },
+            { "Vout Antennae", "TRADEITEM_Vout Antennae" },
+            { "Vout Wing", "TRADEITEM_Vout Wing" },
+            { "Warboar Axe", "TRADEITEM_Warboar Axe" },
+            { "Warboar Head", "TRADEITEM_Warboar Head" },
+            { "Wizboar Head", "TRADEITEM_Wizboar Head" },
+            { "Wizboar Scepter", "TRADEITEM_Wizboar Scepter" },
+            { "Geistlord Nails", "TRADEITEM_Geistlord Nails" },
+
+            // NEW: Trade Items - Ores/Ingots (non-Pack versions)
+            { "Amberite Ingot", "TRADEITEM_Amberite Ingot" },
+            { "Amberite Ore", "TRADEITEM_Amberite Ore" },
+            { "Dense Ingot", "TRADEITEM_Dense Ingot" },
+            { "Dense Ore", "TRADEITEM_Dense Ore" },
+            { "Copper Cluster", "TRADEITEM_Copper Cluster" },
+            { "Iron Cluster", "TRADEITEM_Iron Cluster" },
+            { "Mithril Cluster", "TRADEITEM_Mithril Cluster" },
+            { "Sapphite Ingot", "TRADEITEM_Sapphite Ingot" },
+            { "Sapphite Ore", "TRADEITEM_Sapphite Ore" },
+            { "Coal", "TRADEITEM_Coal" },
+
+            // NEW: Trade Items - Fish
+            { "Big Wan", "TRADEITEM_Big Wan" },
+            { "Bittering Katfish", "TRADEITEM_Bittering Katfish" },
+            { "Bonefish", "TRADEITEM_Bonefish" },
+            { "Smiling Wrellfish", "TRADEITEM_Smiling Wrellfish" },
+            { "Squangfish", "TRADEITEM_Squangfish" },
+            { "Sugeel", "TRADEITEM_Sugeel" },
+            { "Sugshrimp", "TRADEITEM_Sugshrimp" },
+            { "Windtail Fish", "TRADEITEM_Windtail Fish" },
+            { "Old Boot", "TRADEITEM_Old Boot" },
+            { "Bronze Arrows", "TRADEITEM_Bronze Arrows" },
+
+            // NEW: Trade Items - Special Stones/Gems
+            { "Agility Stone", "TRADEITEM_Agility Stone" },
+            { "Angela's Tear", "TRADEITEM_Angela's Tear" },
+            { "Epic Carrot", "TRADEITEM_Epic Carrot" },
+            { "Experience Bond", "TRADEITEM_Experience Bond" },
+            { "Flux Stone", "TRADEITEM_Flux Stone" },
+            { "Illusion Stone", "TRADEITEM_Illusion Stone" },
+            { "Might Stone", "TRADEITEM_Might Stone" },
+            { "Starlight Gem", "TRADEITEM_Starlight Gem" }
         };
 
         private void Awake()
@@ -386,7 +498,7 @@ namespace AtlyssArchipelagoWIP
             cfgDeathlink = Config.Bind("Connection", "DeathLink", false,
                 "If DeathLink should be enabled (can be changed ingame).");
             Logger.LogInfo("=== [AtlyssAP] Plugin loaded! Version 1.3.1 ===");
-            Logger.LogInfo("[AtlyssAP] ALL QUESTS + Commands + Item Drops + 137 ITEMS!");
+            Logger.LogInfo("[AtlyssAP] ALL QUESTS + Commands + Item Drops + 261 ITEMS + 50 Shop Locations!"); // UPDATED
             Logger.LogInfo("[AtlyssAP] Press F5 to connect to Archipelago");
 
             _harmony = new Harmony("com.azrael.atlyss.ap.harmony");
@@ -394,6 +506,9 @@ namespace AtlyssArchipelagoWIP
             scriptHolder = new GameObject("Archipelago Script Holder");
             DontDestroyOnLoad(scriptHolder);
             portalLocker = scriptHolder.AddComponent<PortalUnlocks>();
+
+            // NEW: Initialize shop sanity system (50 locations across 10 merchants)
+            _shopSanity = new ArchipelagoShopSanity(this, Logger);
 
             try
             {
@@ -405,6 +520,7 @@ namespace AtlyssArchipelagoWIP
                 Logger.LogError($"[AtlyssAP] Failed to apply Harmony patches: {ex.Message}");
             }
         }
+
         private void Start()
         {
             if (cfgAutoConnect.Value)
@@ -413,6 +529,7 @@ namespace AtlyssArchipelagoWIP
                 TryConnect();
             }
         }
+
         private void OnDestroy()
         {
             Disconnect();
@@ -420,7 +537,6 @@ namespace AtlyssArchipelagoWIP
 
         private void Update()
         {
-
             if (Input.GetKeyDown(KeyCode.F5))
             {
                 TryConnect();
@@ -430,6 +546,12 @@ namespace AtlyssArchipelagoWIP
             {
                 PollForLevelChanges();
                 PollForQuestCompletions();
+
+                // NEW: Shop sanity polling (check for purchases)
+                if (shopSanityEnabled && _shopSanity.IsInitialized)
+                {
+                    _shopSanity.PollForPurchases(_session);
+                }
             }
         }
 
@@ -469,6 +591,7 @@ namespace AtlyssArchipelagoWIP
                 Logger.LogError($"[AtlyssAP] Error polling level: {ex.Message}");
             }
         }
+
         private void PollForQuestCompletions()
         {
             try
@@ -512,7 +635,6 @@ namespace AtlyssArchipelagoWIP
                         Logger.LogInfo($"[AtlyssAP] Quest completed: {questName}");
                         if (questName == "Gatling Galius")
                         {
-
                             SendAPChatMessage(
                                 $"<color=gold>VICTORY!</color> " +
                                 $"<color=yellow>You completed your goal!</color>"
@@ -663,6 +785,12 @@ namespace AtlyssArchipelagoWIP
 
                 portalLocker.ApplyAreaAccessMode();
 
+                // NEW: Send location scouts if shop sanity is enabled (scouts all 50 locations)
+                if (shopSanityEnabled)
+                {
+                    _shopSanity.SendLocationScouts(_session);
+                }
+
                 string newSessionId = $"{apServer.text}_{apSlot.text}_{_session.RoomState.Seed}";
                 if (IsNewSession(newSessionId))
                 {
@@ -750,6 +878,16 @@ namespace AtlyssArchipelagoWIP
                 _completedQuests.Clear();
                 _lastLevel = 0;
                 _questDebugLogged = false;
+
+                // UPDATED: Reset all 11 portal tracking states
+                foreach (var key in _portalItemsReceived.Keys.ToList())
+                {
+                    _portalItemsReceived[key] = false;
+                }
+
+                // NEW: Reset shop sanity state
+                _shopSanity.Reset();
+
                 Logger.LogInfo("[AtlyssAP] Disconnected.");
             }
         }
@@ -820,7 +958,6 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-
         private void OnItemReceived(ReceivedItemsHelper helper)
         {
             try
@@ -846,45 +983,33 @@ namespace AtlyssArchipelagoWIP
         {
             try
             {
-                
-                if (itemName == "Catacombs Portal")
+                // UPDATED: Check if it's any of the 11 portal items
+                if (_portalItemsReceived.ContainsKey(itemName))
                 {
-                    _catacombsPortalReceived = true;
-                    Logger.LogInfo("[AtlyssAP] Received Catacombs Portal!");
+                    _portalItemsReceived[itemName] = true;
+                    Logger.LogInfo($"[AtlyssAP] Received {itemName}!");
+
+                    if (!_portalScenes.ContainsKey(itemName))
+                    {
+                        Logger.LogError($"[AtlyssAP] Unknown portal item: {itemName}");
+                        return;
+                    }
+
+                    string sceneName = _portalScenes[itemName];
 
                     if (areaAccessOption == 0) // Locked mode
                     {
-                        portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
-                        SendAPChatMessage("<color=#00FFFF>Catacombs portal unlocked!</color>");
+                        portalLocker.UnblockAccessToScene(sceneName);
+                        SendAPChatMessage($"<color=#00FFFF>{itemName.Replace(" Portal", "")} unlocked!</color>");
                     }
                     else if (areaAccessOption == 2) // Progressive mode
                     {
-                        portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
-                        SendAPChatMessage("<color=#00FFFF>Catacombs portal unlocked!</color>");
-                        portalLocker.CheckProgressiveUnlock();
-                    }
-                    return;
-                }
-                else if (itemName == "Grove Portal")
-                {
-                    _grovePortalReceived = true;
-                    Logger.LogInfo("[AtlyssAP] Received Grove Portal!");
-
-                    if (areaAccessOption == 0) // Locked mode
-                    {
-                        portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
-                        SendAPChatMessage("<color=#00FFFF>Grove portal unlocked!</color>");
-                    }
-                    else if (areaAccessOption == 2) // Progressive mode
-                    {
-                        portalLocker.UnblockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
-                        SendAPChatMessage("<color=#00FFFF>Grove portal unlocked!</color>");
-                        portalLocker.CheckProgressiveUnlock();
+                        CheckProgressiveUnlocks(); // NEW: Check progressive unlock chain
                     }
                     return;
                 }
 
-                
+                // Currency handling
                 if (itemName.EndsWith(" Crowns"))
                 {
                     int amount = GetCurrencyAmount(itemName);
@@ -935,7 +1060,34 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        
+        // NEW: Check progressive unlock chain (called when receiving any portal in progressive mode)
+        private void CheckProgressiveUnlocks()
+        {
+            for (int i = 0; i < _progressivePortalOrder.Count; i++)
+            {
+                string portalName = _progressivePortalOrder[i];
+                string sceneName = _portalScenes[portalName];
+
+                // Check if all previous portals are received
+                bool canUnlock = true;
+                for (int j = 0; j <= i; j++)
+                {
+                    if (!_portalItemsReceived[_progressivePortalOrder[j]])
+                    {
+                        canUnlock = false;
+                        break;
+                    }
+                }
+
+                // Unlock if we have all required portals and scene is still locked
+                if (canUnlock && portalLocker.IsSceneLocked(sceneName))
+                {
+                    portalLocker.UnblockAccessToScene(sceneName);
+                    SendAPChatMessage($"<color=#00FFFF>{portalName.Replace(" Portal", "")} unlocked!</color>");
+                }
+            }
+        }
+
         private ItemData CreateItemData(string gameItemName, int quantity)
         {
             string itemName = gameItemName;
@@ -1125,7 +1277,6 @@ namespace AtlyssArchipelagoWIP
                     HandleStatusCommand();
                     break;
                 default:
-
                     try
                     {
                         _session.Socket.SendPacket(new SayPacket { Text = message });
@@ -1139,6 +1290,7 @@ namespace AtlyssArchipelagoWIP
                     break;
             }
         }
+
         private void HandleReleaseCommand()
         {
             try
@@ -1153,6 +1305,7 @@ namespace AtlyssArchipelagoWIP
                 SendAPChatMessage("<color=red>Failed to execute release</color>");
             }
         }
+
         private void HandleCollectCommand()
         {
             try
@@ -1167,6 +1320,7 @@ namespace AtlyssArchipelagoWIP
                 SendAPChatMessage("<color=red>Failed to execute collect</color>");
             }
         }
+
         private void HandleHintCommand(string args)
         {
             try
@@ -1186,6 +1340,7 @@ namespace AtlyssArchipelagoWIP
                 Logger.LogError($"[AtlyssAP] Failed to request hint: {ex.Message}");
             }
         }
+
         private void HandleHelpCommand()
         {
             SendAPChatMessage("<color=yellow>Archipelago Commands:</color>");
@@ -1222,6 +1377,7 @@ namespace AtlyssArchipelagoWIP
                 SendAPChatMessage("<color=red>Failed to get player list</color>");
             }
         }
+
         private void HandleStatusCommand()
         {
             try
@@ -1275,6 +1431,7 @@ namespace AtlyssArchipelagoWIP
                 }
             }
         }
+
         public void ToggleDeathLink(bool enabled)
         {
             if (_session == null || _dlService == null || !_session.Socket.Connected)

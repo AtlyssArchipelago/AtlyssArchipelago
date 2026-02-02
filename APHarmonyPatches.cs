@@ -223,6 +223,72 @@ namespace AtlyssArchipelagoWIP
         }
     }
 
+    // NEW: Shop Sanity patch - Injects AP items into ALL 10 merchant shops
+    // Each merchant gets their own unique 5 AP items (50 total locations)
+    [HarmonyPatch(typeof(NetNPC), "Init_ShopkeepListing")]
+    public static class ShopInventoryPatch
+    {
+        static void Postfix(NetNPC __instance)
+        {
+            try
+            {
+                // Only inject if connected and shop sanity is initialized
+                if (!AtlyssArchipelagoPlugin.Instance.connected)
+                    return;
+
+                if (AtlyssArchipelagoPlugin.Instance._shopSanity == null)
+                    return;
+
+                if (!AtlyssArchipelagoPlugin.Instance._shopSanity.IsInitialized)
+                    return;
+
+                // FIXED: Use GameObject name to identify which merchant this is
+                string npcName = __instance.gameObject.name;
+
+                // List of all 10 merchants that have AP items
+                // Early game: Sally, Skrit, Frankie, Ruka, Fisher, Dye Merchant, Tesh, Nesh
+                // Late game (lvl 20-26): Cotoo, Rikko
+                string[] apMerchants = new string[]
+                {
+                    "_npc_Sally",                       // General merchant (early)
+                    "_npc_Skrit",                       // General merchant (early)
+                    "_npc_sallyWorker_frankie_01",      // General merchant (early)
+                    "_npc_Ruka",                        // General merchant (early)
+                    "_npc_fisher",                      // Equipment + Consumables (early)
+                    "_npc_dyeMerchant",                 // Consumables only (early)
+                    "_npc_Tesh",                        // Equipment only (early)
+                    "_npc_Nesh",                        // Equipment only (early)
+                    "_npc_Cotoo",                       // Equipment only (late game)
+                    "_npc_Rikko"                        // Equipment only (late game)
+                };
+
+                bool isAPMerchant = false;
+                foreach (string merchant in apMerchants)
+                {
+                    if (npcName == merchant)
+                    {
+                        isAPMerchant = true;
+                        break;
+                    }
+                }
+
+                if (!isAPMerchant)
+                {
+                    // Not one of the AP merchants - don't inject
+                    return;
+                }
+
+                AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] AP merchant shop opened: {npcName} - injecting items");
+                AtlyssArchipelagoPlugin.Instance._shopSanity.InjectAPShopItems(__instance);
+            }
+            catch (Exception ex)
+            {
+                AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Shop patch error: {ex.Message}");
+                AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Stack trace: {ex.StackTrace}");
+            }
+        }
+    }
+
     public class SpikePatch
     {
         [HarmonyPatch(typeof(File), nameof(File.ReadAllText), new Type[] { typeof(string) })]
