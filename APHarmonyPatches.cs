@@ -223,6 +223,65 @@ namespace AtlyssArchipelagoWIP
         }
     }
 
+    // NEW: Patch GameManager.Locate_Item to return a dummy ScriptableItem for AP items
+    // This allows the shop UI to create entries for AP items even though they don't exist in the game's item database
+    // The shop UI calls Locate_Item() when creating entries, and returns early if it gets null
+    // By providing a dummy ScriptableItem, we let the normal shop code handle AP items
+    // FIXED: Changed parameter name from "_itemName" to "_tag" to match actual GameManager.Locate_Item signature
+    // FIXED: Use existing item as dummy instead of trying to create abstract class instance (ScriptableItem is abstract)
+    [HarmonyPatch(typeof(GameManager), "Locate_Item")]
+    public static class LocateItemPatch
+    {
+        private static ScriptableItem _dummyAPItem = null;
+
+        static void Postfix(string _tag, ref ScriptableItem __result)
+        {
+            try
+            {
+                // If the item was found normally, don't interfere
+                if (__result != null)
+                    return;
+
+                // Check if this is an AP item
+                if (string.IsNullOrEmpty(_tag) || !_tag.StartsWith("[AP]"))
+                    return;
+
+                // Create or reuse a dummy ScriptableItem for AP items
+                // We can't create ScriptableItem directly (it's abstract), so we find an existing item to use as a dummy
+                if (_dummyAPItem == null)
+                {
+                    // Try to find "Bunbag" as our dummy item (exists in early game)
+                    _dummyAPItem = GameManager._current.Locate_Item("Bunbag");
+
+                    // If Bunbag not found, try other common items
+                    if (_dummyAPItem == null)
+                        _dummyAPItem = GameManager._current.Locate_Item("Wood Sword");
+
+                    if (_dummyAPItem == null)
+                        _dummyAPItem = GameManager._current.Locate_Item("Leather Top");
+
+                    // If still nothing found, log error and return
+                    if (_dummyAPItem == null)
+                    {
+                        AtlyssArchipelagoPlugin.StaticLogger.LogError("[AtlyssAP] Could not find any item to use as dummy for AP items!");
+                        return;
+                    }
+
+                    AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Using '{_dummyAPItem._itemName}' as dummy ScriptableItem for AP items");
+                }
+
+                // Return the dummy item so the shop UI can create an entry
+                __result = _dummyAPItem;
+
+                AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Provided dummy ScriptableItem for: {_tag}");
+            }
+            catch (Exception ex)
+            {
+                AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Locate_Item patch error: {ex.Message}");
+            }
+        }
+    }
+
     // NEW: Shop Sanity patch - Injects AP items into ALL 10 merchant shops
     // Each merchant gets their own unique 5 AP items (50 total locations)
     [HarmonyPatch(typeof(NetNPC), "Init_ShopkeepListing")]
@@ -245,6 +304,8 @@ namespace AtlyssArchipelagoWIP
                 // FIXED: Use GameObject name to identify which merchant this is
                 string npcName = __instance.gameObject.name;
 
+                // UPDATED: Fixed merchant names to match actual GameObject names
+                // fisher and dyeMerchant were using incorrect casing (now lowercase "fisher" and camelCase "dyeMerchant")
                 // List of all 10 merchants that have AP items
                 // Early game: Sally, Skrit, Frankie, Ruka, Fisher, Dye Merchant, Tesh, Nesh
                 // Late game (lvl 20-26): Cotoo, Rikko
@@ -254,8 +315,8 @@ namespace AtlyssArchipelagoWIP
                     "_npc_Skrit",                       // General merchant (early)
                     "_npc_sallyWorker_frankie_01",      // General merchant (early)
                     "_npc_Ruka",                        // General merchant (early)
-                    "_npc_fisher",                      // Equipment + Consumables (early)
-                    "_npc_dyeMerchant",                 // Consumables only (early)
+                    "_npc_fisher",                      // Equipment + Consumables (early) - FIXED: lowercase
+                    "_npc_dyeMerchant",                 // Consumables only (early) - FIXED: camelCase
                     "_npc_Tesh",                        // Equipment only (early)
                     "_npc_Nesh",                        // Equipment only (early)
                     "_npc_Cotoo",                       // Equipment only (late game)

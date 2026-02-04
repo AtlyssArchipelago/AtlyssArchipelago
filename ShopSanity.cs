@@ -26,18 +26,22 @@ namespace AtlyssArchipelagoWIP
             591345, 591346, 591347, 591348, 591349
         };
 
+        // UPDATED: Fixed merchant names to match actual GameObject names in-game
+        // fisher changed from "Fisher" to "fisher" (lowercase)
+        // dyeMerchant changed from "Dye Merchant" to "dyeMerchant" (camelCase)
+        // sallyWorker_frankie_01 changed from "Frankie" to "sallyWorker_frankie_01" (full GameObject name)
         private static readonly Dictionary<string, (long start, long end)> MERCHANT_LOCATION_RANGES = new Dictionary<string, (long, long)>
         {
-            { "Sally", (591300, 591304) },
-            { "Skrit", (591305, 591309) },
-            { "Frankie", (591310, 591314) },
-            { "Ruka", (591315, 591319) },
-            { "Fisher", (591320, 591324) },
-            { "Dye Merchant", (591325, 591329) },
-            { "Tesh", (591330, 591334) },
-            { "Nesh", (591335, 591339) },
-            { "Cotoo", (591340, 591344) },
-            { "Rikko", (591345, 591349) }
+            { "Sally", (591300, 591304) },                      // _npc_Sally
+            { "Skrit", (591305, 591309) },                      // _npc_Skrit
+            { "sallyWorker_frankie_01", (591310, 591314) },     // _npc_sallyWorker_frankie_01 - FIXED: full name
+            { "Ruka", (591315, 591319) },                       // _npc_Ruka
+            { "fisher", (591320, 591324) },                     // _npc_fisher - FIXED: lowercase
+            { "dyeMerchant", (591325, 591329) },                // _npc_dyeMerchant - FIXED: camelCase
+            { "Tesh", (591330, 591334) },                       // _npc_Tesh
+            { "Nesh", (591335, 591339) },                       // _npc_Nesh
+            { "Cotoo", (591340, 591344) },                      // _npc_Cotoo
+            { "Rikko", (591345, 591349) }                       // _npc_Rikko
         };
 
         private static readonly int[] SHOP_PRICE_TIERS = { 15, 500, 1500, 3500, 5000 };
