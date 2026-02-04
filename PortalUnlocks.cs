@@ -94,14 +94,15 @@ namespace AtlyssArchipelagoWIP
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity"
                 }
             },
-            {new PortalData // The portal in Outer Sanctum that leads to Tull Valley
+            {new PortalData // The portal in Outer Sanctum that leads to Tuul Valley
+                // FIXED: Changed "Tull" to "Tuul" (double 'u') to match game's actual portal caption
                 {
-                    portalCaption = "Tull Valley",
+                    portalCaption = "Tuul Valley",
                     spawnID = "spawnPoint",
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity"
                 },new PortalData
                 {
-                    portalCaption = "Tull Valley (Locked!)",
+                    portalCaption = "Tuul Valley (Locked!)",
                     spawnID = "",
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity"
                 }
@@ -202,7 +203,8 @@ namespace AtlyssArchipelagoWIP
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity"
                 }
             },
-            {new PortalData // The portal in Tull Valley that leads to Outer Sanctum
+            {new PortalData // The portal in Tuul Valley that leads to Outer Sanctum
+                // FIXED: Changed "Tull" to "Tuul" (double 'u') to match game's actual portal caption
                 {
                     portalCaption = "Outer Sanctum",
                     spawnID = "tullValleyPoint",
@@ -214,31 +216,34 @@ namespace AtlyssArchipelagoWIP
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity"
                 }
             },
-            {new PortalData // The portal in Tull Valley that leads to the Tull Enclave
+            {new PortalData // The portal in Tuul Valley that leads to the Tuul Enclave
+                // FIXED: Changed "Tull" to "Tuul" (double 'u') to match game's actual portal caption
                 {
-                    portalCaption = "Tull Enclave",
+                    portalCaption = "Tuul Enclave",
                     spawnID = "spawnPoint",
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity"
                 },new PortalData
                 {
-                    portalCaption = "Tull Enclave (Locked!)",
+                    portalCaption = "Tuul Enclave (Locked!)",
                     spawnID = "",
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity"
                 }
             },
-            {new PortalData // The portal in Tull Enclave that leads to Tull Valley
+            {new PortalData // The portal in Tuul Enclave that leads to Tuul Valley
+                // FIXED: Changed "Tull" to "Tuul" (double 'u') to match game's actual portal caption
                 {
-                    portalCaption = "Tull Valley",
+                    portalCaption = "Tuul Valley",
                     spawnID = "enclavePoint",
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity"
                 },new PortalData
                 {
-                    portalCaption = "Tull Valley (Locked!)",
+                    portalCaption = "Tuul Valley (Locked!)",
                     spawnID = "",
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity"
                 }
             },
-            {new PortalData // The portal in Tull Enclave that leads to Bularr Fortress
+            {new PortalData // The portal in Tuul Enclave that leads to Bularr Fortress
+                // FIXED: Changed "Tull" to "Tuul" (double 'u') to match game's actual portal caption
                 {
                     portalCaption = "Bularr Fortress",
                     spawnID = "startPoint",
@@ -250,14 +255,15 @@ namespace AtlyssArchipelagoWIP
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity"
                 }
             },
-            {new PortalData // The portal in Bularr Fortress that leads to Tull Enclave
+            {new PortalData // The portal in Bularr Fortress that leads to Tuul Enclave
+                // FIXED: Changed "Tull" to "Tuul" (double 'u') to match game's actual portal caption
                 {
-                    portalCaption = "Tull Enclave",
+                    portalCaption = "Tuul Enclave",
                     spawnID = "fortSpawn",
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity"
                 },new PortalData
                 {
-                    portalCaption = "Tull Enclave (Locked!)",
+                    portalCaption = "Tuul Enclave (Locked!)",
                     spawnID = "",
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity"
                 }
@@ -412,7 +418,7 @@ namespace AtlyssArchipelagoWIP
             if (!basePlugin.connected || newScene.name == "map_dungeon00_sanctumCatacombs" || newScene.name == "map_dungeon01_crescentGrove")
             {
                 yield break; // we're not connected, so we don't know what to lock.
-                // >>> IDEA: Could possibly default to all areas locked to avoid breaking logic? <
+                // >>> IDEA: Could possibly default to all areas locked to avoid breaking logic? 
             }
             yield return new WaitUntil(() => newScene.isLoaded); // wait for the scene to finish loading, just in case
             yield return new WaitForSecondsRealtime(2); // plus a little to avoid race conditions

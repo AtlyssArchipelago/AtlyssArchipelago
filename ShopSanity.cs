@@ -7,27 +7,41 @@ using UnityEngine;
 
 namespace AtlyssArchipelagoWIP
 {
-    // Handles Shop Sanity: scouts AP locations, injects items into shops, detects purchases
     public class ArchipelagoShopSanity
     {
         private readonly AtlyssArchipelagoPlugin _plugin;
         private readonly ManualLogSource _logger;
 
-        // Shop location IDs (591300-591304)
-        private const long SHOP_PURCHASE_BASE = 591300;
         private static readonly long[] SHOP_LOCATION_IDS = new long[]
         {
-            SHOP_PURCHASE_BASE + 0, // 591300
-            SHOP_PURCHASE_BASE + 1, // 591301
-            SHOP_PURCHASE_BASE + 2, // 591302
-            SHOP_PURCHASE_BASE + 3, // 591303
-            SHOP_PURCHASE_BASE + 4  // 591304
+            591300, 591301, 591302, 591303, 591304,
+            591305, 591306, 591307, 591308, 591309,
+            591310, 591311, 591312, 591313, 591314,
+            591315, 591316, 591317, 591318, 591319,
+            591320, 591321, 591322, 591323, 591324,
+            591325, 591326, 591327, 591328, 591329,
+            591330, 591331, 591332, 591333, 591334,
+            591335, 591336, 591337, 591338, 591339,
+            591340, 591341, 591342, 591343, 591344,
+            591345, 591346, 591347, 591348, 591349
         };
 
-        // Random price tiers for AP items (15 to 5000 crowns)
+        private static readonly Dictionary<string, (long start, long end)> MERCHANT_LOCATION_RANGES = new Dictionary<string, (long, long)>
+        {
+            { "Sally", (591300, 591304) },
+            { "Skrit", (591305, 591309) },
+            { "Frankie", (591310, 591314) },
+            { "Ruka", (591315, 591319) },
+            { "Fisher", (591320, 591324) },
+            { "Dye Merchant", (591325, 591329) },
+            { "Tesh", (591330, 591334) },
+            { "Nesh", (591335, 591339) },
+            { "Cotoo", (591340, 591344) },
+            { "Rikko", (591345, 591349) }
+        };
+
         private static readonly int[] SHOP_PRICE_TIERS = { 15, 500, 1500, 3500, 5000 };
 
-        // Data structure for scouted shop items
         private class ShopAPItemInfo
         {
             public string ItemName;
@@ -37,7 +51,6 @@ namespace AtlyssArchipelagoWIP
             public int SlotNumber;
         }
 
-        // State tracking
         private Dictionary<long, ShopAPItemInfo> _scoutedShopItems = new Dictionary<long, ShopAPItemInfo>();
         private HashSet<long> _purchasedShopItems = new HashSet<long>();
         private bool _shopItemsInitialized = false;
@@ -50,7 +63,6 @@ namespace AtlyssArchipelagoWIP
 
         public bool IsInitialized => _shopItemsInitialized;
 
-        // Send LocationScouts packet to AP server to peek at shop item names
         public void SendLocationScouts(ArchipelagoSession session)
         {
             try
@@ -63,7 +75,6 @@ namespace AtlyssArchipelagoWIP
 
                 _logger.LogInfo($"[AtlyssAP] Scouting {SHOP_LOCATION_IDS.Length} shop locations...");
 
-                // Async scout request
                 session.Locations.ScoutLocationsAsync(SHOP_LOCATION_IDS).ContinueWith(task =>
                 {
                     if (task.IsFaulted)
@@ -84,7 +95,6 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // Process scouted data and store item info with random prices
         private void ProcessScoutedLocations(ArchipelagoSession session, Dictionary<long, ScoutedItemInfo> scoutedLocations)
         {
             try
@@ -99,11 +109,9 @@ namespace AtlyssArchipelagoWIP
                     long locationId = kvp.Key;
                     ScoutedItemInfo itemInfo = kvp.Value;
 
-                    // Get item name and player name
                     string itemName = session.Items.GetItemName(itemInfo.ItemId, itemInfo.ItemGame) ?? $"Item {itemInfo.ItemId}";
                     string playerName = session.Players.GetPlayerName(itemInfo.Player) ?? $"Player {itemInfo.Player}";
 
-                    // Assign random price tier
                     int price = SHOP_PRICE_TIERS[UnityEngine.Random.Range(0, SHOP_PRICE_TIERS.Length)];
 
                     _scoutedShopItems[locationId] = new ShopAPItemInfo
@@ -112,7 +120,7 @@ namespace AtlyssArchipelagoWIP
                         FromPlayer = playerName,
                         LocationId = locationId,
                         Price = price,
-                        SlotNumber = -1 // Assigned when injecting into shop
+                        SlotNumber = -1
                     };
 
                     _logger.LogInfo($"[AtlyssAP] Scouted shop #{index + 1}: {itemName} from {playerName} ({price} crowns)");
@@ -120,7 +128,7 @@ namespace AtlyssArchipelagoWIP
                 }
 
                 _shopItemsInitialized = true;
-                _logger.LogInfo($"[AtlyssAP] Shop items initialized! Ready to inject into shops.");
+                _logger.LogInfo($"[AtlyssAP] Shop items initialized! {_scoutedShopItems.Count} items ready.");
             }
             catch (Exception ex)
             {
@@ -128,24 +136,43 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // Inject AP items into shop's vendor items
         public void InjectAPShopItems(NetNPC npc)
         {
             try
             {
-                // Find which shop slots are already used
-                HashSet<int> usedSlots = new HashSet<int>();
+                string npcName = npc.gameObject.name;
 
+                _logger.LogInfo($"[AtlyssAP] Found NPC GameObject: '{npcName}'");
+
+                string merchantName = null;
+                (long start, long end) range = (0, 0);
+
+                foreach (var kvp in MERCHANT_LOCATION_RANGES)
+                {
+                    if (npcName.Contains(kvp.Key))
+                    {
+                        merchantName = kvp.Key;
+                        range = kvp.Value;
+                        break;
+                    }
+                }
+
+                if (merchantName == null)
+                {
+                    _logger.LogWarning($"[AtlyssAP] Unknown merchant NPC: '{npcName}' - skipping AP injection");
+                    return;
+                }
+
+                _logger.LogInfo($"[AtlyssAP] Matched to merchant: {merchantName} (locations {range.start}-{range.end})");
+
+                HashSet<int> usedSlots = new HashSet<int>();
                 foreach (var vendorItem in npc._vendorItems.Values)
                 {
                     usedSlots.Add(vendorItem._itemData._slotNumber);
                 }
 
-                _logger.LogInfo($"[AtlyssAP] Shop has {usedSlots.Count} used slots");
-
-                // Find next available slots for AP items
                 List<int> availableSlots = new List<int>();
-                for (int slot = 0; availableSlots.Count < SHOP_LOCATION_IDS.Length && slot < 100; slot++)
+                for (int slot = 0; availableSlots.Count < 5 && slot < 100; slot++)
                 {
                     if (!usedSlots.Contains(slot))
                     {
@@ -153,22 +180,26 @@ namespace AtlyssArchipelagoWIP
                     }
                 }
 
-                if (availableSlots.Count < SHOP_LOCATION_IDS.Length)
+                if (availableSlots.Count < 5)
                 {
-                    _logger.LogWarning($"[AtlyssAP] Only found {availableSlots.Count} available slots, need {SHOP_LOCATION_IDS.Length}");
+                    _logger.LogWarning($"[AtlyssAP] Only found {availableSlots.Count} available slots for {merchantName}");
                 }
 
-                // Create and inject each AP item
                 int slotIndex = 0;
-                foreach (var shopItem in _scoutedShopItems.Values)
+                for (long locationId = range.start; locationId <= range.end; locationId++)
                 {
-                    // Skip already purchased items
-                    if (_purchasedShopItems.Contains(shopItem.LocationId))
+                    if (!_scoutedShopItems.TryGetValue(locationId, out var shopItem))
+                    {
+                        _logger.LogWarning($"[AtlyssAP] Missing scouted data for location {locationId}");
+                        continue;
+                    }
+
+                    if (_purchasedShopItems.Contains(locationId))
                         continue;
 
                     if (slotIndex >= availableSlots.Count)
                     {
-                        _logger.LogWarning("[AtlyssAP] Ran out of available shop slots!");
+                        _logger.LogWarning($"[AtlyssAP] Ran out of slots for {merchantName}");
                         break;
                     }
 
@@ -177,7 +208,6 @@ namespace AtlyssArchipelagoWIP
 
                     string displayName = $"[AP] {shopItem.ItemName}";
 
-                    // Create ItemData for shop entry
                     ItemData itemData = new ItemData
                     {
                         _itemName = displayName,
@@ -189,15 +219,14 @@ namespace AtlyssArchipelagoWIP
                         _isAltWeapon = false
                     };
 
-                    // Create ShopkeepItemStruct with custom price
                     ShopkeepItemStruct apShopItem = new ShopkeepItemStruct
                     {
                         _itemName = displayName,
                         _dedicatedValue = shopItem.Price,
-                        _useDedicatedValue = true, // Use our custom price
+                        _useDedicatedValue = true,
                         _itemData = itemData,
                         _stockQuantity = 1,
-                        _removeAtEmptyStock = true, // Remove after purchase
+                        _removeAtEmptyStock = true,
                         _isbuybackItem = false,
                         _isGambleItem = false,
                         _equipModifierID = 0,
@@ -206,7 +235,6 @@ namespace AtlyssArchipelagoWIP
                         _gambleValue = 0
                     };
 
-                    // Add to vendor items dictionary
                     if (!npc._vendorItems.ContainsKey(displayName))
                     {
                         npc._vendorItems.Add(displayName, apShopItem);
@@ -216,7 +244,7 @@ namespace AtlyssArchipelagoWIP
                     slotIndex++;
                 }
 
-                _logger.LogInfo($"[AtlyssAP] Successfully injected {slotIndex} AP items into shop!");
+                _logger.LogInfo($"[AtlyssAP] Successfully injected {slotIndex} AP items into {merchantName}!");
             }
             catch (Exception ex)
             {
@@ -224,7 +252,6 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // Poll player inventory for AP item purchases
         public void PollForPurchases(ArchipelagoSession session)
         {
             try
@@ -242,13 +269,9 @@ namespace AtlyssArchipelagoWIP
 
                     string displayName = $"[AP] {shopItem.ItemName}";
 
-                    // Check if player has this AP item in inventory
                     if (PlayerHasItem(inventory, displayName))
                     {
-                        // Remove placeholder item from inventory
                         RemoveItemFromInventory(inventory, displayName);
-
-                        // Send location check to AP server
                         session.Locations.CompleteLocationChecks(shopItem.LocationId);
                         _purchasedShopItems.Add(shopItem.LocationId);
 
@@ -263,7 +286,6 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // Reset shop state on disconnect
         public void Reset()
         {
             _scoutedShopItems.Clear();
@@ -272,7 +294,6 @@ namespace AtlyssArchipelagoWIP
             _logger.LogInfo("[AtlyssAP] Shop sanity state reset");
         }
 
-        // Check if player has item in their inventory
         private bool PlayerHasItem(PlayerInventory inventory, string itemName)
         {
             for (int i = 0; i < inventory._heldItems.Count; i++)
@@ -285,7 +306,6 @@ namespace AtlyssArchipelagoWIP
             return false;
         }
 
-        // Remove item from player inventory 
         private void RemoveItemFromInventory(PlayerInventory inventory, string itemName)
         {
             for (int i = 0; i < inventory._heldItems.Count; i++)
