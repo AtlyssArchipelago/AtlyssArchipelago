@@ -210,7 +210,9 @@ namespace AtlyssArchipelagoWIP
                     int assignedSlot = availableSlots[slotIndex];
                     shopItem.SlotNumber = assignedSlot;
 
-                    string displayName = $"[AP] {shopItem.ItemName}";
+                    // UPDATED: Show item name AND who it's from so players know exactly what they're buying
+                    // Format: "[AP] ItemName (PlayerName)"
+                    string displayName = $"[AP] {shopItem.ItemName} ({shopItem.FromPlayer})";
 
                     ItemData itemData = new ItemData
                     {
@@ -256,6 +258,70 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
+        // NEW: Handle AP item purchase (called by Harmony patch when player buys AP item)
+        // This replaces the old polling system with immediate purchase detection and location check sending
+        // Extracts the actual item name from the display format "[AP] ItemName (PlayerName)"
+        public void HandleAPItemPurchase(string displayName, string key)
+        {
+            try
+            {
+                // Extract actual item name from "[AP] ItemName (PlayerName)" format
+                // Remove "[AP] " prefix first
+                string withoutPrefix = displayName.Replace("[AP] ", "");
+
+                // Find the opening parenthesis to get just the item name
+                int parenIndex = withoutPrefix.LastIndexOf(" (");
+                string itemName = parenIndex > 0 ? withoutPrefix.Substring(0, parenIndex) : withoutPrefix;
+
+                _logger.LogInfo($"[AtlyssAP] Looking for purchased item: {itemName}");
+
+                // Find the shop item by name
+                ShopAPItemInfo purchasedItem = null;
+                foreach (var shopItem in _scoutedShopItems.Values)
+                {
+                    if (shopItem.ItemName == itemName)
+                    {
+                        purchasedItem = shopItem;
+                        break;
+                    }
+                }
+
+                if (purchasedItem == null)
+                {
+                    _logger.LogError($"[AtlyssAP] Could not find AP item data for: {itemName}");
+                    return;
+                }
+
+                // Check if already purchased
+                if (_purchasedShopItems.Contains(purchasedItem.LocationId))
+                {
+                    _logger.LogWarning($"[AtlyssAP] Item already purchased: {itemName}");
+                    return;
+                }
+
+                // Send location check to server
+                if (_plugin._session != null && _plugin._session.Socket.Connected)
+                {
+                    _plugin._session.Locations.CompleteLocationChecks(purchasedItem.LocationId);
+                    _purchasedShopItems.Add(purchasedItem.LocationId);
+
+                    _plugin.SendAPChatMessage($"<color=yellow>Purchased {itemName}!</color> Item sent to Spike storage!");
+                    _logger.LogInfo($"[AtlyssAP] Shop purchase completed: {displayName} (Location {purchasedItem.LocationId})");
+                }
+                else
+                {
+                    _logger.LogError("[AtlyssAP] Not connected to Archipelago server!");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"[AtlyssAP] Error handling AP purchase: {ex.Message}");
+            }
+        }
+
+        // OLD: PollForPurchases method - NO LONGER USED (replaced by Harmony patch)
+        // Kept for reference but can be removed if desired
+        // The new ShopPurchasePatch intercepts purchases immediately instead of polling
         public void PollForPurchases(ArchipelagoSession session)
         {
             try

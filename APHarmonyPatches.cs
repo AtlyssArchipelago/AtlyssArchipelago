@@ -350,6 +350,87 @@ namespace AtlyssArchipelagoWIP
         }
     }
 
+    // NEW: Patch shop purchase to intercept AP item purchases
+    // When player buys an AP item, we send the location check immediately instead of giving them the dummy item
+    // This replaces the old polling system with instant purchase detection
+    [HarmonyPatch(typeof(ShopkeepManager), "Init_PurchaseItem")]
+    public static class ShopPurchasePatch
+    {
+        static bool Prefix(ScriptableItem _scriptableItem, int _quantity, string _key, ShopListDataEntry _setEntry)
+        {
+            try
+            {
+                // Only intercept if connected and shop sanity is active
+                if (!AtlyssArchipelagoPlugin.Instance.connected)
+                    return true;
+
+                if (AtlyssArchipelagoPlugin.Instance._shopSanity == null)
+                    return true;
+
+                if (!AtlyssArchipelagoPlugin.Instance._shopSanity.IsInitialized)
+                    return true;
+
+                // Check if this is an AP item purchase (name starts with "[AP]")
+                string itemName = _setEntry._shopStruct._itemName;
+                if (!itemName.StartsWith("[AP]"))
+                    return true; // Not an AP item, run normal purchase logic
+
+                AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Intercepting purchase of: {itemName}");
+
+                // Get player components
+                Player localPlayer = Player._mainPlayer;
+                if (localPlayer == null)
+                {
+                    AtlyssArchipelagoPlugin.StaticLogger.LogError("[AtlyssAP] Player not found for purchase!");
+                    return false;
+                }
+
+                PlayerInventory inventory = localPlayer.GetComponent<PlayerInventory>();
+                if (inventory == null)
+                {
+                    AtlyssArchipelagoPlugin.StaticLogger.LogError("[AtlyssAP] PlayerInventory not found!");
+                    return false;
+                }
+
+                // Check if player can afford it
+                int price = _setEntry._shopStruct._dedicatedValue;
+                if (_setEntry._shopStruct._useDedicatedValue)
+                {
+                    price = _setEntry._shopStruct._dedicatedValue;
+                }
+                else if (_scriptableItem != null)
+                {
+                    price = _scriptableItem._vendorCost;
+                }
+
+                if (inventory._heldCurrency < price)
+                {
+                    ErrorPromptTextManager.current.Init_ErrorPrompt("Not enough Crowns");
+                    AtlyssArchipelagoPlugin.StaticLogger.LogInfo("[AtlyssAP] Player cannot afford AP item");
+                    return false; // Block purchase
+                }
+
+                // Deduct currency
+                inventory.Network_heldCurrency -= price;
+                AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Deducted {price} crowns from player");
+
+                // Play purchase sound
+                inventory.Play_PurchaseSound();
+
+                // Handle the AP purchase through shop sanity system
+                AtlyssArchipelagoPlugin.Instance._shopSanity.HandleAPItemPurchase(itemName, _key);
+
+                // Block normal purchase logic (return false prevents dummy item from being given)
+                return false;
+            }
+            catch (Exception ex)
+            {
+                AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Shop purchase patch error: {ex.Message}");
+                return true; // On error, allow normal purchase
+            }
+        }
+    }
+
     public class SpikePatch
     {
         [HarmonyPatch(typeof(File), nameof(File.ReadAllText), new Type[] { typeof(string) })]

@@ -42,7 +42,9 @@ namespace AtlyssArchipelagoWIP
         public InputField apPassword;
         public Toggle apDeathlink;
 
-        private ArchipelagoSession _session;
+        // CHANGED: Made public so ShopSanity can access it for sending location checks
+        // Was: private ArchipelagoSession _session;
+        public ArchipelagoSession _session;
         public bool connected;
         private bool connecting;
         private Dictionary<string, object> slotData = new Dictionary<string, object>();
@@ -547,11 +549,13 @@ namespace AtlyssArchipelagoWIP
                 PollForLevelChanges();
                 PollForQuestCompletions();
 
-                // NEW: Shop sanity polling (check for purchases)
-                if (shopSanityEnabled && _shopSanity.IsInitialized)
-                {
-                    _shopSanity.PollForPurchases(_session);
-                }
+                // REMOVED: Shop sanity polling - NO LONGER NEEDED
+                // Purchases are now handled immediately via ShopPurchasePatch Harmony patch
+                // Old polling system has been replaced with instant purchase detection
+                // if (shopSanityEnabled && _shopSanity.IsInitialized)
+                // {
+                //     _shopSanity.PollForPurchases(_session);
+                // }
             }
         }
 
