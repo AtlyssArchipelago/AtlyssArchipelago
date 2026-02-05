@@ -244,7 +244,7 @@ namespace AtlyssArchipelagoWIP
         // Removed: 9 skill scrolls from item pool (Alacrity, Sturdy, Fira, Crya, Str/Dex/Mind Mastery, Taunt, Curis)
         // UPDATED: Now includes 139 trade items (monster drops, ores, fish, special items)
         // New total: 261 items (was 191)
-        private static readonly Dictionary<string, string> ItemNameMapping = new Dictionary<string, string>
+        public static readonly Dictionary<string, string> ItemNameMapping = new Dictionary<string, string>
         {
             // Consumables
             { "Bunbag Pack", "(lv-0) STATUSCONSUMABLE_Bunbag" },

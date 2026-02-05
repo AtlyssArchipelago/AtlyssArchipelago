@@ -1,7 +1,9 @@
 ﻿using Archipelago.MultiClient.Net.BounceFeatures.DeathLink;
 using HarmonyLib;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -48,7 +50,6 @@ namespace AtlyssArchipelagoWIP
                     // [.SetActive(true)] activate the object, allowing the later GameObject.Find calls work.
                 }
                 AtlyssArchipelagoPlugin basePlugin = AtlyssArchipelagoPlugin.Instance;
-
                 // The Archipelago menu doesn't exist. Create it.
                 var apMenu = GameObject.Instantiate(GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu/_dolly_gameSettings")); // Copy an already existing tab
                 apMenu.name = "_dolly_apSettingsTab"; // rename this object (i don't care to rename the children because we don't need to)
@@ -73,7 +74,6 @@ namespace AtlyssArchipelagoWIP
                     GameObject child = apMenuContent.GetChild(i).gameObject;
                     GameObject.Destroy(child);
                 }
-
                 // Now, repopulate the settings menu with custom inputs
                 // We copy an already working input field so we don't need to make three ourselves.
                 var apServerInput = GameObject.Instantiate(GameObject.Find("_GameUI_MainMenu").transform.Find("_characterSelectMenu/Canvas_characterSelect/_dolly_characterManagement/_input_@nickname"));
@@ -94,7 +94,6 @@ namespace AtlyssArchipelagoWIP
                 apServerInput.transform.localPosition = new Vector3(180, 0, 0); // Align with the settings menu
                 apSlotInput.transform.localPosition = new Vector3(180, 0, 0);
                 apPasswordInput.transform.localPosition = new Vector3(180, 0, 0);
-
                 // Autofill from the config files
                 basePlugin.apServer = apServerInput.GetComponent<InputField>();
                 basePlugin.apSlot = apSlotInput.GetComponent<InputField>();
@@ -107,7 +106,6 @@ namespace AtlyssArchipelagoWIP
                 basePlugin.apSlot.text = basePlugin.cfgSlot.Value;
                 basePlugin.apPassword.text = basePlugin.cfgPassword.Value;
                 basePlugin.apDeathlink.isOn = basePlugin.cfgDeathlink.Value;
-
                 // Now to create the Archipelago button in the settings menu
                 var apSettingsTabButton = GameObject.Instantiate(GameObject.Find("_SettingsManager/Canvas_SettingsMenu/_dolly_settingsMenu/_dolly_tabButtons/Button_gameTab"));
                 apSettingsTabButton.name = "Button_apTab";
@@ -190,7 +188,6 @@ namespace AtlyssArchipelagoWIP
                 if (!string.IsNullOrEmpty(_message) && _message.StartsWith("/"))
                 {
                     string[] apCommands = { "/release", "/collect", "/hint", "/help", "/players", "/status" };
-
                     bool isAPCommand = false;
                     foreach (string cmd in apCommands)
                     {
@@ -200,19 +197,16 @@ namespace AtlyssArchipelagoWIP
                             break;
                         }
                     }
-
                     if (isAPCommand)
                     {
                         if (AtlyssArchipelagoPlugin.Instance != null)
                         {
                             AtlyssArchipelagoPlugin.Instance.HandleArchipelagoCommand(_message);
                         }
-
                         __instance._focusedInChat = false;
                         return false;
                     }
                 }
-
                 return true;
             }
             catch (Exception ex)
@@ -223,16 +217,21 @@ namespace AtlyssArchipelagoWIP
         }
     }
 
-    // NEW: Patch GameManager.Locate_Item to return a dummy ScriptableItem for AP items
-    // This allows the shop UI to create entries for AP items even though they don't exist in the game's item database
-    // The shop UI calls Locate_Item() when creating entries, and returns early if it gets null
-    // By providing a dummy ScriptableItem, we let the normal shop code handle AP items
+    // UPDATED: Patch GameManager.Locate_Item with HYBRID ICON SYSTEM
+    // - Items from ATLYSS game → Show real item's icon (Regen Vial, Iron Sword, etc.)
+    // - Items from other Archipelago games → Show custom Archipelago icon (loaded from embedded resource)
+    // This gives visual clarity for ATLYSS items while showing a unified icon for other games
     // FIXED: Changed parameter name from "_itemName" to "_tag" to match actual GameManager.Locate_Item signature
     // FIXED: Use existing item as dummy instead of trying to create abstract class instance (ScriptableItem is abstract)
     [HarmonyPatch(typeof(GameManager), "Locate_Item")]
     public static class LocateItemPatch
     {
-        private static ScriptableItem _dummyAPItem = null;
+        private static ScriptableItem _customAPItem = null;
+        private static ScriptableItem _fallbackDummyItem = null;
+        private static Sprite _customAPSprite = null;
+
+        // NEW: Cache for AP item -> real item mapping to avoid repeated lookups
+        private static Dictionary<string, ScriptableItem> _apItemCache = new Dictionary<string, ScriptableItem>();
 
         static void Postfix(string _tag, ref ScriptableItem __result)
         {
@@ -246,39 +245,277 @@ namespace AtlyssArchipelagoWIP
                 if (string.IsNullOrEmpty(_tag) || !_tag.StartsWith("[AP]"))
                     return;
 
-                // Create or reuse a dummy ScriptableItem for AP items
-                // We can't create ScriptableItem directly (it's abstract), so we find an existing item to use as a dummy
-                if (_dummyAPItem == null)
+                // Check cache first
+                if (_apItemCache.TryGetValue(_tag, out ScriptableItem cachedItem))
                 {
-                    // Try to find "Bunbag" as our dummy item (exists in early game)
-                    _dummyAPItem = GameManager._current.Locate_Item("Bunbag");
-
-                    // If Bunbag not found, try other common items
-                    if (_dummyAPItem == null)
-                        _dummyAPItem = GameManager._current.Locate_Item("Wood Sword");
-
-                    if (_dummyAPItem == null)
-                        _dummyAPItem = GameManager._current.Locate_Item("Leather Top");
-
-                    // If still nothing found, log error and return
-                    if (_dummyAPItem == null)
-                    {
-                        AtlyssArchipelagoPlugin.StaticLogger.LogError("[AtlyssAP] Could not find any item to use as dummy for AP items!");
-                        return;
-                    }
-
-                    AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Using '{_dummyAPItem._itemName}' as dummy ScriptableItem for AP items");
+                    __result = cachedItem;
+                    return;
                 }
 
-                // Return the dummy item so the shop UI can create an entry
-                __result = _dummyAPItem;
+                // Extract the actual item name from "[AP] ItemName (PlayerName)" format
+                string itemName = ExtractItemName(_tag);
 
-                AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Provided dummy ScriptableItem for: {_tag}");
+                if (string.IsNullOrEmpty(itemName))
+                {
+                    AtlyssArchipelagoPlugin.StaticLogger.LogWarning($"[AtlyssAP] Could not extract item name from: {_tag}");
+                    __result = GetCustomAPItem();
+                    _apItemCache[_tag] = __result;
+                    return;
+                }
+
+                // Try to find the real ATLYSS item
+                ScriptableItem realItem = FindRealItem(itemName);
+
+                if (realItem != null)
+                {
+                    // Found ATLYSS item - use its real icon
+                    _apItemCache[_tag] = realItem;
+                    __result = realItem;
+                    AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Using real item '{realItem._itemName}' icon for: {_tag}");
+                }
+                else
+                {
+                    // Not an ATLYSS item - use custom AP icon
+                    __result = GetCustomAPItem();
+                    _apItemCache[_tag] = __result;
+                    AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Using custom AP icon for non-ATLYSS item: {_tag}");
+                }
             }
             catch (Exception ex)
             {
                 AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Locate_Item patch error: {ex.Message}");
+                __result = GetCustomAPItem();
             }
+        }
+
+        // NEW: Extract the item name from "[AP] ItemName (PlayerName)" format
+        private static string ExtractItemName(string apItemName)
+        {
+            // Remove "[AP] " prefix
+            string withoutPrefix = apItemName.Replace("[AP] ", "");
+
+            // Find the opening parenthesis to get just the item name
+            int parenIndex = withoutPrefix.LastIndexOf(" (");
+            if (parenIndex > 0)
+            {
+                return withoutPrefix.Substring(0, parenIndex);
+            }
+
+            return withoutPrefix;
+        }
+
+        // NEW: Find the real ScriptableItem for a given item name (ATLYSS items only)
+        private static ScriptableItem FindRealItem(string itemName)
+        {
+            // Check if this item exists in our ItemNameMapping
+            if (!AtlyssArchipelagoPlugin.ItemNameMapping.TryGetValue(itemName, out string gameItemName))
+            {
+                // Not in our mapping - must be from another game
+                return null;
+            }
+
+            // Parse the game item name to get the actual item name
+            // Format examples:
+            // "(lv-0) STATUSCONSUMABLE_Regen Vial"
+            // "(lv-6) WEAPON_Iron Sword (Sword, Strength)"
+            // "TRADEITEM_Dense Ingot"
+
+            string actualItemName = gameItemName;
+
+            // Extract name after last underscore
+            int lastUnderscoreIndex = gameItemName.LastIndexOf('_');
+            if (lastUnderscoreIndex >= 0 && lastUnderscoreIndex < gameItemName.Length - 1)
+            {
+                actualItemName = gameItemName.Substring(lastUnderscoreIndex + 1);
+            }
+
+            // Try direct lookup first
+            ScriptableItem item = GameManager._current.Locate_Item(actualItemName);
+            if (item != null)
+                return item;
+
+            // If name has parentheses like "Iron Sword (Sword, Strength)", try without them
+            if (actualItemName.Contains(" (") && actualItemName.EndsWith(")"))
+            {
+                int parenIndex = actualItemName.LastIndexOf(" (");
+                string nameWithoutParen = actualItemName.Substring(0, parenIndex);
+                item = GameManager._current.Locate_Item(nameWithoutParen);
+                if (item != null)
+                    return item;
+            }
+
+            // Try without spaces
+            string noSpaces = actualItemName.Replace(" ", "");
+            item = GameManager._current.Locate_Item(noSpaces);
+            if (item != null)
+                return item;
+
+            return null;
+        }
+
+        // NEW: Get or create custom AP ScriptableItem with custom Archipelago icon
+        // This is used for items from other Archipelago games (not ATLYSS items)
+        // FIXED: Use Object.Instantiate to clone base item instead of CreateInstance (ScriptableItem is abstract)
+        private static ScriptableItem GetCustomAPItem()
+        {
+            if (_customAPItem == null)
+            {
+                // Get a base item to clone
+                ScriptableItem baseItem = GetFallbackDummy();
+
+                if (baseItem != null)
+                {
+                    // FIXED: Clone the base item using Instantiate instead of CreateInstance
+                    // ScriptableItem is abstract and cannot be instantiated with CreateInstance<T>()
+                    // Instantiate() clones an existing object which works even for abstract classes
+                    _customAPItem = UnityEngine.Object.Instantiate(baseItem);
+
+                    // FIXED: Rename the cloned item so it doesn't display as "Bunbag" in shops
+                    // This ensures non-ATLYSS items show as "Archipelago Item" instead of the base item name
+                    _customAPItem._itemName = "Archipelago Item";
+
+                    // Load and apply custom icon
+                    Sprite customSprite = LoadCustomAPSprite();
+                    if (customSprite != null)
+                    {
+                        // Try to set the icon using reflection since we don't know the exact field name
+                        TrySetItemIcon(_customAPItem, customSprite);
+                        AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Loaded custom Archipelago icon successfully!");
+                    }
+                    else
+                    {
+                        AtlyssArchipelagoPlugin.StaticLogger.LogWarning($"[AtlyssAP] Failed to load custom icon, using base item icon");
+                        // _customAPItem already has base item's icon from clone, which is acceptable fallback
+                    }
+                }
+                else
+                {
+                    AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Could not create custom AP item - no base item available");
+                }
+            }
+
+            return _customAPItem;
+        }
+
+        // NEW: Load custom Archipelago sprite from embedded resource
+        private static Sprite LoadCustomAPSprite()
+        {
+            if (_customAPSprite != null)
+                return _customAPSprite;
+
+            try
+            {
+                // Get the assembly where the icon is embedded
+                Assembly assembly = Assembly.GetExecutingAssembly();
+
+                // FIXED: Commented out unused variable to avoid compiler warning
+                // Resource name will be auto-detected in the loop below
+                // string resourceName = "Atlyss_AP.Archipelago.png-256x256_q95.png";
+
+                // Try to find the resource (case-sensitive)
+                string[] resourceNames = assembly.GetManifestResourceNames();
+                string foundResource = null;
+
+                foreach (string name in resourceNames)
+                {
+                    if (name.EndsWith("Archipelago.png-256x256_q95.png"))
+                    {
+                        foundResource = name;
+                        break;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(foundResource))
+                {
+                    AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Could not find Archipelago.png-256x256_q95.png in embedded resources");
+                    AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Available resources: {string.Join(", ", resourceNames)}");
+                    return null;
+                }
+
+                // Load the image bytes from embedded resource
+                using (Stream stream = assembly.GetManifestResourceStream(foundResource))
+                {
+                    if (stream == null)
+                    {
+                        AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Failed to open embedded resource stream");
+                        return null;
+                    }
+
+                    byte[] imageData = new byte[stream.Length];
+                    stream.Read(imageData, 0, imageData.Length);
+
+                    // Create texture from image data
+                    Texture2D texture = new Texture2D(2, 2); // Size will be overwritten by LoadImage
+                    if (!texture.LoadImage(imageData))
+                    {
+                        AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Failed to load image data into texture");
+                        return null;
+                    }
+
+                    // Create sprite from texture
+                    // Unity will automatically handle scaling the 256x256 image to whatever size the game needs
+                    _customAPSprite = Sprite.Create(
+                        texture,
+                        new Rect(0, 0, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f), // Pivot at center
+                        100.0f // Pixels per unit
+                    );
+
+                    AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Successfully loaded custom AP sprite: {texture.width}x{texture.height}");
+                    return _customAPSprite;
+                }
+            }
+            catch (Exception ex)
+            {
+                AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Error loading custom sprite: {ex.Message}");
+                return null;
+            }
+        }
+
+        // NEW: Try to set the item icon using reflection (since we don't know the exact field name)
+        private static void TrySetItemIcon(ScriptableItem item, Sprite sprite)
+        {
+            try
+            {
+                // Common field names for item icons in Unity games
+                string[] possibleFieldNames = { "_icon", "_itemIcon", "_sprite", "_itemSprite", "icon", "sprite" };
+
+                Type itemType = item.GetType();
+
+                foreach (string fieldName in possibleFieldNames)
+                {
+                    FieldInfo field = itemType.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (field != null && field.FieldType == typeof(Sprite))
+                    {
+                        field.SetValue(item, sprite);
+                        AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Set item icon using field: {fieldName}");
+                        return;
+                    }
+                }
+
+                AtlyssArchipelagoPlugin.StaticLogger.LogWarning($"[AtlyssAP] Could not find icon field on ScriptableItem");
+            }
+            catch (Exception ex)
+            {
+                AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Error setting item icon: {ex.Message}");
+            }
+        }
+
+        // Get fallback dummy item (Bunbag) for when custom icon isn't loaded yet
+        private static ScriptableItem GetFallbackDummy()
+        {
+            if (_fallbackDummyItem == null)
+            {
+                _fallbackDummyItem = GameManager._current.Locate_Item("Bunbag");
+
+                if (_fallbackDummyItem == null)
+                    _fallbackDummyItem = GameManager._current.Locate_Item("Wood Sword");
+
+                if (_fallbackDummyItem == null)
+                    _fallbackDummyItem = GameManager._current.Locate_Item("Leather Top");
+            }
+
+            return _fallbackDummyItem;
         }
     }
 
@@ -294,10 +531,8 @@ namespace AtlyssArchipelagoWIP
                 // Only inject if connected and shop sanity is initialized
                 if (!AtlyssArchipelagoPlugin.Instance.connected)
                     return;
-
                 if (AtlyssArchipelagoPlugin.Instance._shopSanity == null)
                     return;
-
                 if (!AtlyssArchipelagoPlugin.Instance._shopSanity.IsInitialized)
                     return;
 
@@ -340,6 +575,7 @@ namespace AtlyssArchipelagoWIP
                 }
 
                 AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] AP merchant shop opened: {npcName} - injecting items");
+                // FIXED: Removed second parameter (npcName) - method extracts it from __instance.gameObject.name internally
                 AtlyssArchipelagoPlugin.Instance._shopSanity.InjectAPShopItems(__instance);
             }
             catch (Exception ex)
@@ -363,10 +599,8 @@ namespace AtlyssArchipelagoWIP
                 // Only intercept if connected and shop sanity is active
                 if (!AtlyssArchipelagoPlugin.Instance.connected)
                     return true;
-
                 if (AtlyssArchipelagoPlugin.Instance._shopSanity == null)
                     return true;
-
                 if (!AtlyssArchipelagoPlugin.Instance._shopSanity.IsInitialized)
                     return true;
 
@@ -445,11 +679,9 @@ namespace AtlyssArchipelagoWIP
                     {
                         return true;
                     }
-
                     if (path.EndsWith("atl_itemBank") && !path.Contains("_ap"))
                     {
                         string apMasterPath = ArchipelagoSpikeStorage.GetAPMasterBankPath();
-
                         if (File.Exists(apMasterPath))
                         {
                             __result = File.ReadAllText(apMasterPath);
@@ -462,17 +694,14 @@ namespace AtlyssArchipelagoWIP
                             return false;
                         }
                     }
-
                     if (path.Contains("atl_itemBank_") && !path.Contains("_ap_"))
                     {
                         string fileName = Path.GetFileName(path);
-
                         for (int i = 1; i <= 7; i++)
                         {
                             if (fileName == $"atl_itemBank_{i:D2}")
                             {
                                 string apPath = ArchipelagoSpikeStorage.GetAPBankPath(i);
-
                                 if (File.Exists(apPath))
                                 {
                                     __result = File.ReadAllText(apPath);
@@ -487,7 +716,6 @@ namespace AtlyssArchipelagoWIP
                             }
                         }
                     }
-
                     return true;
                 }
                 catch (Exception ex)
@@ -510,7 +738,6 @@ namespace AtlyssArchipelagoWIP
                     {
                         return true;
                     }
-
                     if (path.EndsWith("atl_itemBank") && !path.Contains("_ap"))
                     {
                         string apMasterPath = ArchipelagoSpikeStorage.GetAPMasterBankPath();
@@ -519,16 +746,13 @@ namespace AtlyssArchipelagoWIP
                         {
                             Directory.CreateDirectory(dir);
                         }
-
                         File.WriteAllText(apMasterPath, contents);
                         StaticLogger?.LogInfo("[AtlyssAP] Redirected Spike save: MASTER bank -> AP MASTER bank");
                         return false;
                     }
-
                     if (path.Contains("atl_itemBank_") && !path.Contains("_ap_"))
                     {
                         string fileName = Path.GetFileName(path);
-
                         for (int i = 1; i <= 7; i++)
                         {
                             if (fileName == $"atl_itemBank_{i:D2}")
@@ -540,7 +764,6 @@ namespace AtlyssArchipelagoWIP
                             }
                         }
                     }
-
                     return true;
                 }
                 catch (Exception ex)

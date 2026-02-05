@@ -326,5 +326,9 @@
   <ItemGroup>
     <Folder Include="Properties\" />
   </ItemGroup>
+  <!-- NEW: Embedded Archipelago icon - will be included in the DLL -->
+  <ItemGroup>
+    <EmbeddedResource Include="Archipelago.png-256x256_q95.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
