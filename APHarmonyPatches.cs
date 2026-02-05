@@ -292,7 +292,7 @@ namespace AtlyssArchipelagoWIP
         }
 
         // NEW: Extract the item name from "[AP] ItemName (PlayerName)" format
-        private static string ExtractItemName(string apItemName)
+        public static string ExtractItemName(string apItemName)
         {
             // Remove "[AP] " prefix
             string withoutPrefix = apItemName.Replace("[AP] ", "");

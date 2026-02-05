@@ -265,13 +265,8 @@ namespace AtlyssArchipelagoWIP
         {
             try
             {
-                // Extract actual item name from "[AP] ItemName (PlayerName)" format
-                // Remove "[AP] " prefix first
-                string withoutPrefix = displayName.Replace("[AP] ", "");
-
-                // Find the opening parenthesis to get just the item name
-                int parenIndex = withoutPrefix.LastIndexOf(" (");
-                string itemName = parenIndex > 0 ? withoutPrefix.Substring(0, parenIndex) : withoutPrefix;
+                // Extract actual item name from "[AP] ItemName (PlayerName)" format. Use already existing helper function
+                string itemName = LocateItemPatch.ExtractItemName(displayName);
 
                 _logger.LogInfo($"[AtlyssAP] Looking for purchased item: {itemName}");
 
@@ -319,74 +314,12 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // OLD: PollForPurchases method - NO LONGER USED (replaced by Harmony patch)
-        // Kept for reference but can be removed if desired
-        // The new ShopPurchasePatch intercepts purchases immediately instead of polling
-        public void PollForPurchases(ArchipelagoSession session)
-        {
-            try
-            {
-                Player localPlayer = Player._mainPlayer;
-                if (localPlayer == null) return;
-
-                PlayerInventory inventory = localPlayer.GetComponent<PlayerInventory>();
-                if (inventory == null) return;
-
-                foreach (var shopItem in _scoutedShopItems.Values)
-                {
-                    if (_purchasedShopItems.Contains(shopItem.LocationId))
-                        continue;
-
-                    string displayName = $"[AP] {shopItem.ItemName}";
-
-                    if (PlayerHasItem(inventory, displayName))
-                    {
-                        RemoveItemFromInventory(inventory, displayName);
-                        session.Locations.CompleteLocationChecks(shopItem.LocationId);
-                        _purchasedShopItems.Add(shopItem.LocationId);
-
-                        _plugin.SendAPChatMessage($"<color=yellow>Purchased {shopItem.ItemName}!</color> Check Spike storage!");
-                        _logger.LogInfo($"[AtlyssAP] Shop purchase detected: {displayName} (Location {shopItem.LocationId})");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"[AtlyssAP] Error polling shop purchases: {ex.Message}");
-            }
-        }
-
         public void Reset()
         {
             _scoutedShopItems.Clear();
             _purchasedShopItems.Clear();
             _shopItemsInitialized = false;
             _logger.LogInfo("[AtlyssAP] Shop sanity state reset");
-        }
-
-        private bool PlayerHasItem(PlayerInventory inventory, string itemName)
-        {
-            for (int i = 0; i < inventory._heldItems.Count; i++)
-            {
-                if (inventory._heldItems[i]._itemName == itemName)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private void RemoveItemFromInventory(PlayerInventory inventory, string itemName)
-        {
-            for (int i = 0; i < inventory._heldItems.Count; i++)
-            {
-                if (inventory._heldItems[i]._itemName == itemName)
-                {
-                    inventory.Remove_Item(inventory._heldItems[i], 0);
-                    _logger.LogInfo($"[AtlyssAP] Removed {itemName} from inventory");
-                    return;
-                }
-            }
         }
     }
 }
