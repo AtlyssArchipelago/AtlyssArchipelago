@@ -226,7 +226,8 @@ namespace AtlyssArchipelagoWIP
     [HarmonyPatch(typeof(GameManager), "Locate_Item")]
     public static class LocateItemPatch
     {
-        private static ScriptableItem _customAPItem = null;
+        // REMOVED: No longer using singleton _customAPItem since each item needs unique name
+        // private static ScriptableItem _customAPItem = null;
         private static ScriptableItem _fallbackDummyItem = null;
         private static Sprite _customAPSprite = null;
 
@@ -258,7 +259,8 @@ namespace AtlyssArchipelagoWIP
                 if (string.IsNullOrEmpty(itemName))
                 {
                     AtlyssArchipelagoPlugin.StaticLogger.LogWarning($"[AtlyssAP] Could not extract item name from: {_tag}");
-                    __result = GetCustomAPItem();
+                    // UPDATED: Pass fallback name for items with extraction issues
+                    __result = GetCustomAPItem("Unknown Item");
                     _apItemCache[_tag] = __result;
                     return;
                 }
@@ -275,8 +277,9 @@ namespace AtlyssArchipelagoWIP
                 }
                 else
                 {
-                    // Not an ATLYSS item - use custom AP icon
-                    __result = GetCustomAPItem();
+                    // Not an ATLYSS item - use custom AP icon with the actual item name
+                    // UPDATED: Pass actual item name so non-ATLYSS items show their real names (e.g., "Roll Fragment")
+                    __result = GetCustomAPItem(itemName);
                     _apItemCache[_tag] = __result;
                     AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Using custom AP icon for non-ATLYSS item: {_tag}");
                 }
@@ -284,7 +287,7 @@ namespace AtlyssArchipelagoWIP
             catch (Exception ex)
             {
                 AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Locate_Item patch error: {ex.Message}");
-                __result = GetCustomAPItem();
+                __result = GetCustomAPItem("Unknown Item");
             }
         }
 
@@ -356,45 +359,56 @@ namespace AtlyssArchipelagoWIP
         // NEW: Get or create custom AP ScriptableItem with custom Archipelago icon
         // This is used for items from other Archipelago games (not ATLYSS items)
         // FIXED: Use Object.Instantiate to clone base item instead of CreateInstance (ScriptableItem is abstract)
-        private static ScriptableItem GetCustomAPItem()
+        // UPDATED: Accept item name parameter to display actual item names from other games
+        // Each call creates a new instance with unique name - caching happens at _apItemCache level
+        private static ScriptableItem GetCustomAPItem(string itemName = "Archipelago Item")
         {
-            if (_customAPItem == null)
+            // UPDATED: No longer using singleton _customAPItem since each item needs unique name
+            // The caching is handled at the _apItemCache level in Postfix()
+            // This allows each non-ATLYSS item to display its actual name (e.g., "Roll Fragment", "Bonus Point")
+
+            // Get a base item to clone
+            ScriptableItem baseItem = GetFallbackDummy();
+
+            if (baseItem != null)
             {
-                // Get a base item to clone
-                ScriptableItem baseItem = GetFallbackDummy();
+                // FIXED: Clone the base item using Instantiate instead of CreateInstance
+                // ScriptableItem is abstract and cannot be instantiated with CreateInstance<T>()
+                // Instantiate() clones an existing object which works even for abstract classes
+                ScriptableItem customItem = UnityEngine.Object.Instantiate(baseItem);
 
-                if (baseItem != null)
+                // UPDATED: Set the actual item name from other games instead of generic "Archipelago Item"
+                // This makes items display as "Roll Fragment", "Bonus Point", "Category Sixes", etc.
+                // instead of showing "Bunbag" (the base item) or "Archipelago Item" (generic fallback)
+                customItem._itemName = itemName;
+
+                // Load and apply custom icon
+                Sprite customSprite = LoadCustomAPSprite();
+                if (customSprite != null)
                 {
-                    // FIXED: Clone the base item using Instantiate instead of CreateInstance
-                    // ScriptableItem is abstract and cannot be instantiated with CreateInstance<T>()
-                    // Instantiate() clones an existing object which works even for abstract classes
-                    _customAPItem = UnityEngine.Object.Instantiate(baseItem);
+                    // Try to set the icon using reflection since we don't know the exact field name
+                    TrySetItemIcon(customItem, customSprite);
 
-                    // FIXED: Rename the cloned item so it doesn't display as "Bunbag" in shops
-                    // This ensures non-ATLYSS items show as "Archipelago Item" instead of the base item name
-                    _customAPItem._itemName = "Archipelago Item";
-
-                    // Load and apply custom icon
-                    Sprite customSprite = LoadCustomAPSprite();
-                    if (customSprite != null)
+                    // Only log success message on first sprite load (when _customAPSprite was null)
+                    // This avoids spamming the log with "Loaded custom Archipelago icon successfully!" for every item
+                    if (_customAPSprite == null)
                     {
-                        // Try to set the icon using reflection since we don't know the exact field name
-                        TrySetItemIcon(_customAPItem, customSprite);
                         AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Loaded custom Archipelago icon successfully!");
                     }
-                    else
-                    {
-                        AtlyssArchipelagoPlugin.StaticLogger.LogWarning($"[AtlyssAP] Failed to load custom icon, using base item icon");
-                        // _customAPItem already has base item's icon from clone, which is acceptable fallback
-                    }
+                    _customAPSprite = customSprite;
                 }
                 else
                 {
-                    AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Could not create custom AP item - no base item available");
+                    AtlyssArchipelagoPlugin.StaticLogger.LogWarning($"[AtlyssAP] Failed to load custom icon, using base item icon");
                 }
-            }
 
-            return _customAPItem;
+                return customItem;
+            }
+            else
+            {
+                AtlyssArchipelagoPlugin.StaticLogger.LogError($"[AtlyssAP] Could not create custom AP item - no base item available");
+                return null;
+            }
         }
 
         // NEW: Load custom Archipelago sprite from embedded resource
@@ -454,7 +468,7 @@ namespace AtlyssArchipelagoWIP
 
                     // Create sprite from texture
                     // Unity will automatically handle scaling the 256x256 image to whatever size the game needs
-                    _customAPSprite = Sprite.Create(
+                    Sprite sprite = Sprite.Create(
                         texture,
                         new Rect(0, 0, texture.width, texture.height),
                         new Vector2(0.5f, 0.5f), // Pivot at center
@@ -462,7 +476,7 @@ namespace AtlyssArchipelagoWIP
                     );
 
                     AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Successfully loaded custom AP sprite: {texture.width}x{texture.height}");
-                    return _customAPSprite;
+                    return sprite;
                 }
             }
             catch (Exception ex)
