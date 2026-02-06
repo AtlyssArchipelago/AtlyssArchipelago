@@ -110,6 +110,10 @@ namespace AtlyssArchipelagoWIP
         private readonly HashSet<long> _reportedChecks = new HashSet<long>();
 
         private int _lastLevel = 0;
+        // NEW: Track previous profession levels to detect fishing/mining increases
+        private int _previousFishingLevel = 1;
+        private int _previousMiningLevel = 1;
+
         private HashSet<string> _completedQuests = new HashSet<string>();
         private bool _questDebugLogged = false;
 
@@ -231,6 +235,34 @@ namespace AtlyssArchipelagoWIP
             { 591001, "Defeat Slime Diva" },
             { 591002, "Defeat Lord Zuulneruda" },
             { 591003, "Defeat Galius" },
+        };
+
+        // NEW: Fishing level locations (591400-591408) - Added for fishing progression tracking
+        private static readonly Dictionary<int, long> FishingLevelLocations = new Dictionary<int, long>
+        {
+            { 2, 591400 },
+            { 3, 591401 },
+            { 4, 591402 },
+            { 5, 591403 },
+            { 6, 591404 },
+            { 7, 591405 },
+            { 8, 591406 },
+            { 9, 591407 },
+            { 10, 591408 }
+        };
+
+        // NEW: Mining level locations (591409-591417) - Added for mining progression tracking
+        private static readonly Dictionary<int, long> MiningLevelLocations = new Dictionary<int, long>
+        {
+            { 2, 591409 },
+            { 3, 591410 },
+            { 4, 591411 },
+            { 5, 591412 },
+            { 6, 591413 },
+            { 7, 591414 },
+            { 8, 591415 },
+            { 9, 591416 },
+            { 10, 591417 }
         };
 
         private string GetLocationName(long locationId)
@@ -548,6 +580,8 @@ namespace AtlyssArchipelagoWIP
             {
                 PollForLevelChanges();
                 PollForQuestCompletions();
+                // NEW: Poll for fishing and mining level changes
+                PollForSkillLevelChanges();
 
                 // REMOVED: Shop sanity polling - NO LONGER NEEDED
                 // Purchases are now handled immediately via ShopPurchasePatch Harmony patch
@@ -593,6 +627,89 @@ namespace AtlyssArchipelagoWIP
             catch (Exception ex)
             {
                 Logger.LogError($"[AtlyssAP] Error polling level: {ex.Message}");
+            }
+        }
+
+        // NEW: Poll for fishing and mining level changes - Added to track profession skill levels
+        private void PollForSkillLevelChanges()
+        {
+            try
+            {
+                Player localPlayer = Player._mainPlayer;
+                if (localPlayer == null) return;
+
+                // Get PlayerStats component to access profession data
+                PlayerStats playerStats = localPlayer._pStats;
+                if (playerStats == null) return;
+
+                // Search through professions SyncList to find fishing and mining by name
+                for (int i = 0; i < playerStats._syncProfessions.Count; i++)
+                {
+                    ProfessionStruct profession = playerStats._syncProfessions[i];
+
+                    // Get the ScriptableProfession to access the profession name
+                    ScriptableProfession scriptableProfession = null;
+                    if (GameManager._current != null && GameManager._current._statLogics != null)
+                    {
+                        if (i < GameManager._current._statLogics._scriptableProfessions.Length)
+                        {
+                            scriptableProfession = GameManager._current._statLogics._scriptableProfessions[i];
+                        }
+                    }
+
+                    if (scriptableProfession == null)
+                        continue;
+
+                    // Check if this is the Fishing profession
+                    if (scriptableProfession._professionName == "Fishing")
+                    {
+                        int currentFishingLevel = profession._professionLvl;
+                        if (currentFishingLevel > _previousFishingLevel)
+                        {
+                            // Send checks for all levels between previous and current
+                            for (int level = _previousFishingLevel + 1; level <= currentFishingLevel; level++)
+                            {
+                                if (FishingLevelLocations.TryGetValue(level, out long locationId))
+                                {
+                                    SendCheckById(locationId);
+                                    SendAPChatMessage(
+                                        $"Found <color=yellow>Fishing Level {level}</color>! " +
+                                        $"Sent item to another player!"
+                                    );
+                                    Logger.LogInfo($"[AtlyssAP] Fishing level {level} reached!");
+                                }
+                            }
+                            _previousFishingLevel = currentFishingLevel;
+                        }
+                    }
+
+                    // Check if this is the Mining profession
+                    if (scriptableProfession._professionName == "Mining")
+                    {
+                        int currentMiningLevel = profession._professionLvl;
+                        if (currentMiningLevel > _previousMiningLevel)
+                        {
+                            // Send checks for all levels between previous and current
+                            for (int level = _previousMiningLevel + 1; level <= currentMiningLevel; level++)
+                            {
+                                if (MiningLevelLocations.TryGetValue(level, out long locationId))
+                                {
+                                    SendCheckById(locationId);
+                                    SendAPChatMessage(
+                                        $"Found <color=yellow>Mining Level {level}</color>! " +
+                                        $"Sent item to another player!"
+                                    );
+                                    Logger.LogInfo($"[AtlyssAP] Mining level {level} reached!");
+                                }
+                            }
+                            _previousMiningLevel = currentMiningLevel;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"[AtlyssAP] Error checking skill levels: {ex.Message}");
             }
         }
 
@@ -840,6 +957,10 @@ namespace AtlyssArchipelagoWIP
                     {
                         _lastLevel = stats.Network_currentLevel;
                         Logger.LogInfo($"[AtlyssAP] Starting at level {_lastLevel}");
+
+                        // NEW: Reset tracked profession levels on connection
+                        _previousFishingLevel = 1;
+                        _previousMiningLevel = 1;
                     }
                 }
                 connected = true;
@@ -881,6 +1002,9 @@ namespace AtlyssArchipelagoWIP
                 _reportedChecks.Clear();
                 _completedQuests.Clear();
                 _lastLevel = 0;
+                // NEW: Reset profession level tracking on disconnect
+                _previousFishingLevel = 1;
+                _previousMiningLevel = 1;
                 _questDebugLogged = false;
 
                 // UPDATED: Reset all 11 portal tracking states
