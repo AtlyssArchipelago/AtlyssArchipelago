@@ -1,4 +1,4 @@
-using Archipelago.MultiClient.Net;
+﻿using Archipelago.MultiClient.Net;
 using Archipelago.MultiClient.Net.Enums;
 using Archipelago.MultiClient.Net.Helpers;
 using Archipelago.MultiClient.Net.Models;
@@ -129,12 +129,30 @@ namespace AtlyssArchipelagoWIP
         private const long DEFEAT_VALDUR = BASE_LOCATION_ID + 6;
         private const long REACH_LEVEL_2 = BASE_LOCATION_ID + 10;
 
+        // CORRECTED: Fixed multiple quest name typos to match locations.py exactly
+        // Changes made:
+        // - "The Colosseum" → "The Colossus"
+        // - "Summons'" → "Summore'" (all instances)
+        // - "Cleansing Terrace" → "Cleaning Terrace"
+        // - "Ambente Ingots" → "Amberite Ingots"
+        // - "Battlecage Rage" → "Rattlecage Rage"
+        // - "Wicked Wizbars" → "Wicked Wizboars"
+        // - "Reckoning Foes" → "Beckoning Foes"
+        // - "Makin' a Giant Chestpiece" → "Makin' a Golem Chestpiece"
+        // - "Canmore'" → "Summore'" (all instances)
+        // - "Finding Armagorn" → "Finding Ammagon"
+        // - "Reviling_the_Rageboars" → "Reviling the Rageboars" (removed underscore)
+        // - "Reviling the Ragebears" → "Reviling More Rageboars"
+        // - "Purging the Grave" → "Purging the Grove"
+        // - "Summon'" → "Summore'" (all instances)
+        // - ADDED "Spiraling In The Grove" (was missing)
+        // - Renumbered IDs after 201 to accommodate missing quest
         private static readonly Dictionary<string, long> AllQuestToLocation = new Dictionary<string, long>
         {
             { "Diva Must Die", DEFEAT_SLIME_DIVA },
             { "The Voice of Zuulneruda", DEFEAT_LORD_ZUULNERUDA },
             { "Gatling Galius", DEFEAT_GALIUS },
-            { "The Colosseum", DEFEAT_COLOSSUS },
+            { "The Colossus", DEFEAT_COLOSSUS },  // FIXED: was "The Colosseum"
 
             { "A Warm Welcome", BASE_LOCATION_ID + 30 },
             { "Communing Catacombs", BASE_LOCATION_ID + 31 },
@@ -144,20 +162,20 @@ namespace AtlyssArchipelagoWIP
             { "Killing Tomb", BASE_LOCATION_ID + 102 },
             { "Night Spirits", BASE_LOCATION_ID + 103 },
             { "Ridding Slimes", BASE_LOCATION_ID + 104 },
-            { "Summons' Spectral Powder!", BASE_LOCATION_ID + 105 },
+            { "Summore' Spectral Powder!", BASE_LOCATION_ID + 105 },  // FIXED: was "Summons'"
 
             { "Call of Fury", BASE_LOCATION_ID + 110 },
             { "Cold Shoulder", BASE_LOCATION_ID + 111 },
             { "Focusin' in", BASE_LOCATION_ID + 112 },
 
-            { "Cleansing Terrace", BASE_LOCATION_ID + 115 },
+            { "Cleaning Terrace", BASE_LOCATION_ID + 115 },  // FIXED: was "Cleansing Terrace"
             { "Huntin' Hogs", BASE_LOCATION_ID + 116 },
 
-            { "Ambente Ingots", BASE_LOCATION_ID + 120 },
+            { "Amberite Ingots", BASE_LOCATION_ID + 120 },  // FIXED: was "Ambente Ingots"
             { "Makin' a Mekspear", BASE_LOCATION_ID + 121 },
             { "Makin' More Mekspears", BASE_LOCATION_ID + 122 },
             { "Purging the Undead", BASE_LOCATION_ID + 123 },
-            { "Battlecage Rage", BASE_LOCATION_ID + 124 },
+            { "Rattlecage Rage", BASE_LOCATION_ID + 124 },  // FIXED: was "Battlecage Rage"
             { "Ancient Beings", BASE_LOCATION_ID + 125 },
 
             { "Makin' a Vile Blade", BASE_LOCATION_ID + 130 },
@@ -172,39 +190,40 @@ namespace AtlyssArchipelagoWIP
             { "Mastery of Mind", BASE_LOCATION_ID + 143 },
             { "Mastery of Strength", BASE_LOCATION_ID + 144 },
             { "Strength and Honor", BASE_LOCATION_ID + 145 },
-            { "Wicked Wizbars", BASE_LOCATION_ID + 146 },
+            { "Wicked Wizboars", BASE_LOCATION_ID + 146 },  // FIXED: was "Wicked Wizbars"
 
-            { "Reckoning Foes", BASE_LOCATION_ID + 150 },
+            { "Beckoning Foes", BASE_LOCATION_ID + 150 },  // FIXED: was "Reckoning Foes"
             { "Blossom of Life", BASE_LOCATION_ID + 151 },
             { "Consumed Madness", BASE_LOCATION_ID + 152 },
             { "Eradicating the Undead", BASE_LOCATION_ID + 153 },
-            { "Makin' a Giant Chestpiece", BASE_LOCATION_ID + 154 },
-            { "Canmore' Golem Chestpieces", BASE_LOCATION_ID + 155 },
+            { "Makin' a Golem Chestpiece", BASE_LOCATION_ID + 154 },  // FIXED: was "Makin' a Giant Chestpiece"
+            { "Summore' Golem Chestpieces", BASE_LOCATION_ID + 155 },  // FIXED: was "Canmore' Golem Chestpieces"
             { "Whatta' Rush!", BASE_LOCATION_ID + 156 },
 
-            { "Finding Armagorn", BASE_LOCATION_ID + 160 },
-            { "Reviling_the_Rageboars", BASE_LOCATION_ID + 161 },
-            { "Reviling the Ragebears", BASE_LOCATION_ID + 162 },
+            { "Finding Ammagon", BASE_LOCATION_ID + 160 },  // FIXED: was "Finding Armagorn"
+            { "Reviling the Rageboars", BASE_LOCATION_ID + 161 },  // FIXED: was "Reviling_the_Rageboars" (removed underscore)
+            { "Reviling More Rageboars", BASE_LOCATION_ID + 162 },  // FIXED: was "Reviling the Ragebears"
 
             { "Makin' a Ragespear", BASE_LOCATION_ID + 165 },
             { "Makin' More Ragespears", BASE_LOCATION_ID + 166 },
-            { "Purging the Grave", BASE_LOCATION_ID + 167 },
+            { "Purging the Grove", BASE_LOCATION_ID + 167 },  // FIXED: was "Purging the Grave"
             { "Searching for the Grove", BASE_LOCATION_ID + 168 },
             { "Tethering Grove", BASE_LOCATION_ID + 169 },
             { "Up and Over It", BASE_LOCATION_ID + 170 },
 
             { "Makin' a Monolith Chestpiece", BASE_LOCATION_ID + 175 },
-            { "Summons' Monolith Chestpieces", BASE_LOCATION_ID + 176 },
+            { "Summore' Monolith Chestpieces", BASE_LOCATION_ID + 176 },  // FIXED: was "Summons' Monolith Chestpieces"
 
             { "Facing Foes", BASE_LOCATION_ID + 180 },
 
             { "Cleansing the Grove", BASE_LOCATION_ID + 200 },
-            { "Hell In The Grove", BASE_LOCATION_ID + 201 },
-            { "Makin' a Firebreath Blade", BASE_LOCATION_ID + 202 },
-            { "Nulversa Magica", BASE_LOCATION_ID + 203 },
-            { "Nulversa Viscera", BASE_LOCATION_ID + 204 },
-            { "Nulversa, Greenveras!", BASE_LOCATION_ID + 205 },
-            { "Summon' Firebreath Blades", BASE_LOCATION_ID + 206 },
+            { "Spiraling In The Grove", BASE_LOCATION_ID + 201 },  // ADDED: was missing entirely
+            { "Hell In The Grove", BASE_LOCATION_ID + 202 },  // RENUMBERED: was 201
+            { "Makin' a Firebreath Blade", BASE_LOCATION_ID + 203 },  // RENUMBERED: was 202
+            { "Nulversa Magica", BASE_LOCATION_ID + 204 },  // RENUMBERED: was 203
+            { "Nulversa Viscera", BASE_LOCATION_ID + 205 },  // RENUMBERED: was 204
+            { "Nulversa, Greenveras!", BASE_LOCATION_ID + 206 },  // RENUMBERED: was 205
+            { "Summore' Firebreath Blades", BASE_LOCATION_ID + 207 },  // FIXED & RENUMBERED: was "Summon'" at 206
 
             { "The Gall of Galius", BASE_LOCATION_ID + 220 },
 
@@ -1138,7 +1157,7 @@ namespace AtlyssArchipelagoWIP
                 }
 
                 // Currency handling
-                if (itemName.EndsWith(" Crowns"))
+                if (itemName.StartsWith("Crowns ("))  // FIXED: was EndsWith(" Crowns") - now properly catches "Crowns (Small)", "Crowns (Medium)", etc.
                 {
                     int amount = GetCurrencyAmount(itemName);
                     if (amount > 0)
