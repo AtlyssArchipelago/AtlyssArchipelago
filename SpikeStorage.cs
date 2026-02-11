@@ -152,17 +152,45 @@ namespace AtlyssArchipelagoWIP
         {
             try
             {
-                if (TryAddToMasterBank(itemToAdd))
-                {
-                    return true;
-                }
+                // CHANGED: Instead of filling the master bank first and only overflowing to
+                // numbered banks when master is full, we now:
+                // 1. Try to stack with existing items across ALL banks (if item is stackable)
+                // 2. If not stackable or no stack space, find the first open slot across ALL banks
+                // This distributes items more evenly and prevents the master tab from overflowing
+                // while other tabs sit empty.
 
-                for (int bankNum = 1; bankNum <= NUM_BANKS; bankNum++)
-                {
-                    ItemBankData bank = LoadAPBank(bankNum);
+                bool isStackable = itemToAdd._maxQuantity > 1;
 
-                    if (itemToAdd._quantity < itemToAdd._maxQuantity)
+                // Step 1: Try stacking across all banks (master first, then 1-7)
+                if (isStackable)
+                {
+                    // Try master bank stacking
+                    ItemBankData masterBank = LoadAPMasterBank();
+                    foreach (var existingItem in masterBank._heldItemStorage)
                     {
+                        if (existingItem._itemName == itemToAdd._itemName &&
+                            existingItem._quantity < existingItem._maxQuantity)
+                        {
+                            int spaceAvailable = existingItem._maxQuantity - existingItem._quantity;
+                            int amountToAdd = Math.Min(spaceAvailable, itemToAdd._quantity);
+                            existingItem._quantity += amountToAdd;
+                            itemToAdd._quantity -= amountToAdd;
+                            SaveAPMasterBank(masterBank);
+
+                            if (itemToAdd._quantity == 0)
+                            {
+                                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
+                                    $"[AtlyssAP] Added {itemToAdd._itemName} to AP Spike MASTER bank (stacked)"
+                                );
+                                return true;
+                            }
+                        }
+                    }
+
+                    // Try numbered bank stacking
+                    for (int bankNum = 1; bankNum <= NUM_BANKS; bankNum++)
+                    {
+                        ItemBankData bank = LoadAPBank(bankNum);
                         foreach (var existingItem in bank._heldItemStorage)
                         {
                             if (existingItem._itemName == itemToAdd._itemName &&
@@ -170,10 +198,8 @@ namespace AtlyssArchipelagoWIP
                             {
                                 int spaceAvailable = existingItem._maxQuantity - existingItem._quantity;
                                 int amountToAdd = Math.Min(spaceAvailable, itemToAdd._quantity);
-
                                 existingItem._quantity += amountToAdd;
                                 itemToAdd._quantity -= amountToAdd;
-
                                 SaveAPBank(bankNum, bank);
 
                                 if (itemToAdd._quantity == 0)
@@ -186,24 +212,36 @@ namespace AtlyssArchipelagoWIP
                             }
                         }
                     }
+                }
 
-                    int nextSlot = 0;
-                    HashSet<int> usedSlots = new HashSet<int>();
-                    foreach (var item in bank._heldItemStorage)
-                    {
-                        usedSlots.Add(item._slotNumber);
-                    }
-
-                    while (usedSlots.Contains(nextSlot))
-                    {
-                        nextSlot++;
-                    }
-
-                    if (nextSlot < 40)
+                // Step 2: Find first open slot across all banks (master first, then 1-7)
+                // Try master bank (100 slots)
+                {
+                    ItemBankData masterBank = LoadAPMasterBank();
+                    int nextSlot = FindNextOpenSlot(masterBank, 100);
+                    if (nextSlot >= 0)
                     {
                         itemToAdd._slotNumber = nextSlot;
                         itemToAdd._isEquipped = false;
+                        masterBank._heldItemStorage.Add(itemToAdd);
+                        SaveAPMasterBank(masterBank);
 
+                        AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
+                            $"[AtlyssAP] Added {itemToAdd._itemName} to AP Spike MASTER bank slot {nextSlot}"
+                        );
+                        return true;
+                    }
+                }
+
+                // Try numbered banks (40 slots each)
+                for (int bankNum = 1; bankNum <= NUM_BANKS; bankNum++)
+                {
+                    ItemBankData bank = LoadAPBank(bankNum);
+                    int nextSlot = FindNextOpenSlot(bank, 40);
+                    if (nextSlot >= 0)
+                    {
+                        itemToAdd._slotNumber = nextSlot;
+                        itemToAdd._isEquipped = false;
                         bank._heldItemStorage.Add(itemToAdd);
                         SaveAPBank(bankNum, bank);
 
@@ -228,13 +266,39 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
+        // ADDED: Helper to find the next open slot in a bank, returns -1 if bank is full
+        private static int FindNextOpenSlot(ItemBankData bank, int maxSlots)
+        {
+            HashSet<int> usedSlots = new HashSet<int>();
+            foreach (var item in bank._heldItemStorage)
+            {
+                usedSlots.Add(item._slotNumber);
+            }
+
+            int nextSlot = 0;
+            while (usedSlots.Contains(nextSlot))
+            {
+                nextSlot++;
+            }
+
+            return nextSlot < maxSlots ? nextSlot : -1;
+        }
+
+        // NOTE: No longer called by AddItemToAPSpike (which now handles all banks itself),
+        // but kept for potential external use. Fixed stackability check.
         private static bool TryAddToMasterBank(ItemData itemToAdd)
         {
             try
             {
                 ItemBankData masterBank = LoadAPMasterBank();
 
-                if (itemToAdd._quantity < itemToAdd._maxQuantity)
+                // FIXED: Only try stacking for items that are actually stackable.
+                // Equipment has maxQuantity=1, so the old check (quantity < maxQuantity)
+                // was 1 < 1 = false, which worked by accident. But for safety, we now
+                // explicitly check maxQuantity > 1 to skip the stacking loop entirely
+                // for non-stackable items like weapons and armor.
+                bool isStackable = itemToAdd._maxQuantity > 1;
+                if (isStackable)
                 {
                     foreach (var existingItem in masterBank._heldItemStorage)
                     {

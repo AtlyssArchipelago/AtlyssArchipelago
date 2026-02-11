@@ -10,6 +10,7 @@ using HarmonyLib;
 using System;
 using System.IO;
 using System.Collections;
+using System.Collections.Concurrent;  // ADDED: For ConcurrentQueue to safely pass items from network thread to main thread
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -108,6 +109,13 @@ namespace AtlyssArchipelagoWIP
         public ArchipelagoShopSanity _shopSanity;
 
         private readonly HashSet<long> _reportedChecks = new HashSet<long>();
+
+        // ADDED: Thread-safe queue for items received from Archipelago network thread.
+        // OnItemReceived fires from a background thread, but Unity collections (like
+        // vendor inventories, Spike storage) can only be modified on the main thread.
+        // Without this queue, concurrent access causes InvalidOperationException spam.
+        private readonly ConcurrentQueue<(string itemName, string fromPlayer)> _receivedItemQueue
+            = new ConcurrentQueue<(string, string)>();
 
         private int _lastLevel = 0;
         // NEW: Track previous profession levels to detect fishing/mining increases
@@ -217,8 +225,8 @@ namespace AtlyssArchipelagoWIP
             { "Facing Foes", BASE_LOCATION_ID + 180 },
 
             { "Cleansing the Grove", BASE_LOCATION_ID + 200 },
-            { "Spiraling In The Grove", BASE_LOCATION_ID + 201 },  // ADDED: was missing entirely
-            { "Hell In The Grove", BASE_LOCATION_ID + 202 },  // RENUMBERED: was 201
+            { "Hell In The Grove", BASE_LOCATION_ID + 201 },  // FIXED: was swapped with Spiraling (now matches locations.py)
+            { "Spiraling In The Grove", BASE_LOCATION_ID + 202 },  // FIXED: was swapped with Hell (now matches locations.py)
             { "Makin' a Firebreath Blade", BASE_LOCATION_ID + 203 },  // RENUMBERED: was 202
             { "Nulversa Magica", BASE_LOCATION_ID + 204 },  // RENUMBERED: was 203
             { "Nulversa Viscera", BASE_LOCATION_ID + 205 },  // RENUMBERED: was 204
@@ -597,6 +605,25 @@ namespace AtlyssArchipelagoWIP
 
             if (connected)
             {
+                // ADDED: Process items received from Archipelago on the main thread.
+                // This drains the ConcurrentQueue that OnItemReceived fills from the
+                // network thread, ensuring all Unity object modifications happen safely.
+                while (_receivedItemQueue.TryDequeue(out var received))
+                {
+                    try
+                    {
+                        SendAPChatMessage(
+                            $"Received <color=yellow>{received.itemName}</color> " +
+                            $"from <color=#00FFFF>{received.fromPlayer}</color>!"
+                        );
+                        HandleReceivedItem(received.itemName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"[AtlyssAP] Error processing queued item '{received.itemName}': {ex.Message}");
+                    }
+                }
+
                 PollForLevelChanges();
                 PollForQuestCompletions();
                 // NEW: Poll for fishing and mining level changes
@@ -1035,6 +1062,9 @@ namespace AtlyssArchipelagoWIP
                 // NEW: Reset shop sanity state
                 _shopSanity.Reset();
 
+                // ADDED: Drain any remaining queued items on disconnect
+                while (_receivedItemQueue.TryDequeue(out _)) { }
+
                 Logger.LogInfo("[AtlyssAP] Disconnected.");
             }
         }
@@ -1114,11 +1144,12 @@ namespace AtlyssArchipelagoWIP
                 string fromPlayerName = _session.Players.GetPlayerName(item.Player) ?? $"Player {item.Player}";
                 Logger.LogInfo($"[AtlyssAP] Received: {itemName} from {fromPlayerName}");
 
-                SendAPChatMessage(
-                    $"Received <color=yellow>{itemName}</color> " +
-                    $"from <color=#00FFFF>{fromPlayerName}</color>!"
-                );
-                HandleReceivedItem(itemName);
+                // CHANGED: Queue the item for main-thread processing instead of handling here.
+                // This callback fires from the Archipelago network thread. Directly modifying
+                // Unity objects (Spike storage, vendor inventories, player inventory) from this
+                // thread causes InvalidOperationException: "Operations that change non-concurrent
+                // collections must have exclusive access." The queue is processed in Update().
+                _receivedItemQueue.Enqueue((itemName, fromPlayerName));
             }
             catch (Exception ex)
             {
