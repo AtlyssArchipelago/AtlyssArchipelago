@@ -44,7 +44,10 @@ namespace AtlyssArchipelagoWIP
             { "Rikko", (591345, 591349) }                       // _npc_Rikko
         };
 
-        private static readonly int[] SHOP_PRICE_TIERS = { 15, 500, 1500, 3500, 5000 };
+        // UPDATED: Changed from fixed tiers to a random range of 15-3000 crowns
+        // to reduce grinding needed for shop purchases
+        private const int SHOP_PRICE_MIN = 15;
+        private const int SHOP_PRICE_MAX = 3000;
 
         private class ShopAPItemInfo
         {
@@ -116,7 +119,7 @@ namespace AtlyssArchipelagoWIP
                     string itemName = session.Items.GetItemName(itemInfo.ItemId, itemInfo.ItemGame) ?? $"Item {itemInfo.ItemId}";
                     string playerName = session.Players.GetPlayerName(itemInfo.Player) ?? $"Player {itemInfo.Player}";
 
-                    int price = SHOP_PRICE_TIERS[UnityEngine.Random.Range(0, SHOP_PRICE_TIERS.Length)];
+                    int price = UnityEngine.Random.Range(SHOP_PRICE_MIN, SHOP_PRICE_MAX + 1);
 
                     _scoutedShopItems[locationId] = new ShopAPItemInfo
                     {
@@ -270,11 +273,15 @@ namespace AtlyssArchipelagoWIP
 
                 _logger.LogInfo($"[AtlyssAP] Looking for purchased item: {itemName}");
 
-                // Find the shop item by name
+                // FIX: Find the FIRST UNPURCHASED shop item matching this name
+                // Old code matched by name only without checking purchase state, so duplicate items
+                // (e.g. 7x Progressive Portal across different shops) always found the first copy
+                // which was already bought, causing "already purchased" errors for every subsequent buy.
+                // Now we also check !_purchasedShopItems.Contains() to skip already-bought locations.
                 ShopAPItemInfo purchasedItem = null;
                 foreach (var shopItem in _scoutedShopItems.Values)
                 {
-                    if (shopItem.ItemName == itemName)
+                    if (shopItem.ItemName == itemName && !_purchasedShopItems.Contains(shopItem.LocationId))
                     {
                         purchasedItem = shopItem;
                         break;
@@ -283,14 +290,7 @@ namespace AtlyssArchipelagoWIP
 
                 if (purchasedItem == null)
                 {
-                    _logger.LogError($"[AtlyssAP] Could not find AP item data for: {itemName}");
-                    return;
-                }
-
-                // Check if already purchased
-                if (_purchasedShopItems.Contains(purchasedItem.LocationId))
-                {
-                    _logger.LogWarning($"[AtlyssAP] Item already purchased: {itemName}");
+                    _logger.LogWarning($"[AtlyssAP] No unpurchased AP item found for: {itemName} (all copies may already be bought)");
                     return;
                 }
 

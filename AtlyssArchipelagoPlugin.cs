@@ -10,7 +10,6 @@ using HarmonyLib;
 using System;
 using System.IO;
 using System.Collections;
-using System.Collections.Concurrent;  // ADDED: For ConcurrentQueue to safely pass items from network thread to main thread
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -54,8 +53,13 @@ namespace AtlyssArchipelagoWIP
         public static int reactingToDeathLink;
 
         private int goalOption = 3;
-        public int areaAccessOption = 0;
+        public bool randomPortalsEnabled = false;
+        private int equipmentProgressionOption = 0;
         private bool shopSanityEnabled = false;
+
+        // Progressive item counters (incremented each time a progressive item is received)
+        private int progressivePortalCount = 0;
+        private int progressiveEquipmentTier = 0;  // 0=Tier1 only, 1=Tier2, 2=Tier3, 3=Tier4, 4=Tier5
 
         // UPDATED: Expanded from 2 portals to 11 portals with dictionary tracking
         private Dictionary<string, bool> _portalItemsReceived = new Dictionary<string, bool>
@@ -109,13 +113,6 @@ namespace AtlyssArchipelagoWIP
         public ArchipelagoShopSanity _shopSanity;
 
         private readonly HashSet<long> _reportedChecks = new HashSet<long>();
-
-        // ADDED: Thread-safe queue for items received from Archipelago network thread.
-        // OnItemReceived fires from a background thread, but Unity collections (like
-        // vendor inventories, Spike storage) can only be modified on the main thread.
-        // Without this queue, concurrent access causes InvalidOperationException spam.
-        private readonly ConcurrentQueue<(string itemName, string fromPlayer)> _receivedItemQueue
-            = new ConcurrentQueue<(string, string)>();
 
         private int _lastLevel = 0;
         // NEW: Track previous profession levels to detect fishing/mining increases
@@ -225,8 +222,8 @@ namespace AtlyssArchipelagoWIP
             { "Facing Foes", BASE_LOCATION_ID + 180 },
 
             { "Cleansing the Grove", BASE_LOCATION_ID + 200 },
-            { "Hell In The Grove", BASE_LOCATION_ID + 201 },  // FIXED: was swapped with Spiraling (now matches locations.py)
-            { "Spiraling In The Grove", BASE_LOCATION_ID + 202 },  // FIXED: was swapped with Hell (now matches locations.py)
+            { "Spiraling In The Grove", BASE_LOCATION_ID + 201 },  // ADDED: was missing entirely
+            { "Hell In The Grove", BASE_LOCATION_ID + 202 },  // RENUMBERED: was 201
             { "Makin' a Firebreath Blade", BASE_LOCATION_ID + 203 },  // RENUMBERED: was 202
             { "Nulversa Magica", BASE_LOCATION_ID + 204 },  // RENUMBERED: was 203
             { "Nulversa Viscera", BASE_LOCATION_ID + 205 },  // RENUMBERED: was 204
@@ -605,25 +602,6 @@ namespace AtlyssArchipelagoWIP
 
             if (connected)
             {
-                // ADDED: Process items received from Archipelago on the main thread.
-                // This drains the ConcurrentQueue that OnItemReceived fills from the
-                // network thread, ensuring all Unity object modifications happen safely.
-                while (_receivedItemQueue.TryDequeue(out var received))
-                {
-                    try
-                    {
-                        SendAPChatMessage(
-                            $"Received <color=yellow>{received.itemName}</color> " +
-                            $"from <color=#00FFFF>{received.fromPlayer}</color>!"
-                        );
-                        HandleReceivedItem(received.itemName);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError($"[AtlyssAP] Error processing queued item '{received.itemName}': {ex.Message}");
-                    }
-                }
-
                 PollForLevelChanges();
                 PollForQuestCompletions();
                 // NEW: Poll for fishing and mining level changes
@@ -910,11 +888,15 @@ namespace AtlyssArchipelagoWIP
                             string[] goalNames = { "Slime Diva", "Lord Zuulneruda", "Colossus", "Galius", "Lord Kaluuz", "Valdur", "All Bosses", "All Quests", "Level 32" };
                             Logger.LogInfo($"[AtlyssAP] Goal: {goalNames[goalOption]}");
                         }
-                        if (slotData.ContainsKey("area_access"))
+                        if (slotData.ContainsKey("random_portals"))
                         {
-                            areaAccessOption = Convert.ToInt32(slotData["area_access"]);
-                            string[] areaNames = { "Locked", "Unlocked", "Progressive" };
-                            Logger.LogInfo($"[AtlyssAP] Area Access: {areaNames[areaAccessOption]}");
+                            randomPortalsEnabled = Convert.ToInt32(slotData["random_portals"]) == 1;
+                            Logger.LogInfo($"[AtlyssAP] Portal Mode: {(randomPortalsEnabled ? "Random Portals" : "Progressive Portals")}");
+                        }
+                        if (slotData.ContainsKey("equipment_progression"))
+                        {
+                            equipmentProgressionOption = Convert.ToInt32(slotData["equipment_progression"]);
+                            Logger.LogInfo($"[AtlyssAP] Equipment: {(equipmentProgressionOption == 1 ? "Progressive" : "Random")}");
                         }
                         if (slotData.ContainsKey("shop_sanity"))
                         {
@@ -1059,11 +1041,12 @@ namespace AtlyssArchipelagoWIP
                     _portalItemsReceived[key] = false;
                 }
 
+                // Reset progressive counters
+                progressivePortalCount = 0;
+                progressiveEquipmentTier = 0;
+
                 // NEW: Reset shop sanity state
                 _shopSanity.Reset();
-
-                // ADDED: Drain any remaining queued items on disconnect
-                while (_receivedItemQueue.TryDequeue(out _)) { }
 
                 Logger.LogInfo("[AtlyssAP] Disconnected.");
             }
@@ -1144,12 +1127,11 @@ namespace AtlyssArchipelagoWIP
                 string fromPlayerName = _session.Players.GetPlayerName(item.Player) ?? $"Player {item.Player}";
                 Logger.LogInfo($"[AtlyssAP] Received: {itemName} from {fromPlayerName}");
 
-                // CHANGED: Queue the item for main-thread processing instead of handling here.
-                // This callback fires from the Archipelago network thread. Directly modifying
-                // Unity objects (Spike storage, vendor inventories, player inventory) from this
-                // thread causes InvalidOperationException: "Operations that change non-concurrent
-                // collections must have exclusive access." The queue is processed in Update().
-                _receivedItemQueue.Enqueue((itemName, fromPlayerName));
+                SendAPChatMessage(
+                    $"Received <color=yellow>{itemName}</color> " +
+                    $"from <color=#00FFFF>{fromPlayerName}</color>!"
+                );
+                HandleReceivedItem(itemName);
             }
             catch (Exception ex)
             {
@@ -1161,28 +1143,104 @@ namespace AtlyssArchipelagoWIP
         {
             try
             {
-                // UPDATED: Check if it's any of the 11 portal items
+                // === PROGRESSIVE PORTAL ===
+                // Each copy received unlocks the next area in the fixed sequence.
+                if (itemName == "Progressive Portal")
+                {
+                    progressivePortalCount++;
+                    Logger.LogInfo($"[AtlyssAP] Progressive Portal #{progressivePortalCount}");
+
+                    if (progressivePortalCount <= _progressivePortalOrder.Count)
+                    {
+                        string portalName = _progressivePortalOrder[progressivePortalCount - 1];
+                        if (_portalScenes.ContainsKey(portalName))
+                        {
+                            string sceneName = _portalScenes[portalName];
+                            portalLocker.UnblockAccessToScene(sceneName);
+                            SendAPChatMessage($"<color=#00FFFF>{portalName.Replace(" Portal", "")} unlocked!</color>");
+                        }
+                    }
+                    return;
+                }
+
+                // === PROGRESSIVE EQUIPMENT ===
+                // FIX: Now actually grants a random equipment piece at or below the player's current level.
+                // Old code only incremented a counter and showed a chat message without giving any item.
+                // New code reads the player's level, filters all equipment from ItemNameMapping,
+                // picks one randomly, creates ItemData via CreateItemData, and adds it to Spike storage.
+                if (itemName == "Progressive Equipment")
+                {
+                    progressiveEquipmentTier++;
+                    Logger.LogInfo($"[AtlyssAP] Progressive Equipment received (#{progressiveEquipmentTier})");
+
+                    try
+                    {
+                        // Get the player's current level
+                        int playerLevel = 1;
+                        Player localPlayer = Player._mainPlayer;
+                        if (localPlayer != null)
+                        {
+                            PlayerStats stats = localPlayer.GetComponent<PlayerStats>();
+                            if (stats != null)
+                            {
+                                playerLevel = stats.Network_currentLevel;
+                            }
+                        }
+
+                        // Pick a random equipment piece at or below player level
+                        var eligible = GetEquipmentForLevel(playerLevel);
+                        if (eligible.Count > 0)
+                        {
+                            int randomIndex = UnityEngine.Random.Range(0, eligible.Count);
+                            var chosen = eligible[randomIndex];
+                            string chosenItemName = chosen.Key;
+                            string chosenGameName = chosen.Value;
+
+                            Logger.LogInfo($"[AtlyssAP] Progressive Equipment chose: {chosenItemName} (player level {playerLevel})");
+
+                            ItemData itemData = CreateItemData(chosenGameName, 1);
+                            if (itemData != null)
+                            {
+                                if (ArchipelagoSpikeStorage.AddItemToAPSpike(itemData))
+                                {
+                                    SendAPChatMessage($"<color=#FFD700>Progressive Equipment: {chosenItemName}!</color> Check Spike's storage!");
+                                    Logger.LogInfo($"[AtlyssAP] Added {chosenItemName} to Spike storage");
+                                }
+                                else
+                                {
+                                    Logger.LogWarning($"[AtlyssAP] Failed to add {chosenItemName} to storage - banks full!");
+                                    SendAPChatMessage($"<color=red>Storage full! Could not store {chosenItemName}</color>");
+                                }
+                            }
+                            else
+                            {
+                                Logger.LogWarning($"[AtlyssAP] Could not create ItemData for: {chosenItemName}");
+                            }
+                        }
+                        else
+                        {
+                            Logger.LogWarning($"[AtlyssAP] No eligible equipment found for level {playerLevel}!");
+                            SendAPChatMessage($"<color=red>Progressive Equipment: No gear available for level {playerLevel}!</color>");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"[AtlyssAP] Error processing Progressive Equipment: {ex.Message}");
+                    }
+                    return;
+                }
+
+                // === INDIVIDUAL PORTAL ITEMS (Random Portals mode only) ===
                 if (_portalItemsReceived.ContainsKey(itemName))
                 {
                     _portalItemsReceived[itemName] = true;
                     Logger.LogInfo($"[AtlyssAP] Received {itemName}!");
 
-                    if (!_portalScenes.ContainsKey(itemName))
+                    if (_portalScenes.ContainsKey(itemName))
                     {
-                        Logger.LogError($"[AtlyssAP] Unknown portal item: {itemName}");
-                        return;
-                    }
-
-                    string sceneName = _portalScenes[itemName];
-
-                    if (areaAccessOption == 0) // Locked mode
-                    {
+                        string sceneName = _portalScenes[itemName];
                         portalLocker.UnblockAccessToScene(sceneName);
                         SendAPChatMessage($"<color=#00FFFF>{itemName.Replace(" Portal", "")} unlocked!</color>");
-                    }
-                    else if (areaAccessOption == 2) // Progressive mode
-                    {
-                        CheckProgressiveUnlocks(); // NEW: Check progressive unlock chain
                     }
                     return;
                 }
@@ -1238,33 +1296,8 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // NEW: Check progressive unlock chain (called when receiving any portal in progressive mode)
-        private void CheckProgressiveUnlocks()
-        {
-            for (int i = 0; i < _progressivePortalOrder.Count; i++)
-            {
-                string portalName = _progressivePortalOrder[i];
-                string sceneName = _portalScenes[portalName];
-
-                // Check if all previous portals are received
-                bool canUnlock = true;
-                for (int j = 0; j <= i; j++)
-                {
-                    if (!_portalItemsReceived[_progressivePortalOrder[j]])
-                    {
-                        canUnlock = false;
-                        break;
-                    }
-                }
-
-                // Unlock if we have all required portals and scene is still locked
-                if (canUnlock && portalLocker.IsSceneLocked(sceneName))
-                {
-                    portalLocker.UnblockAccessToScene(sceneName);
-                    SendAPChatMessage($"<color=#00FFFF>{portalName.Replace(" Portal", "")} unlocked!</color>");
-                }
-            }
-        }
+        // Progressive portal unlocking is now handled directly in HandleReceivedItem
+        // by incrementing progressivePortalCount and unlocking the next portal in sequence.
 
         private ItemData CreateItemData(string gameItemName, int quantity)
         {
@@ -1358,18 +1391,70 @@ namespace AtlyssArchipelagoWIP
             return 100;
         }
 
+        // FIX: Changed filler quantity logic so ALL non-equipment items give 10 instead of 1.
+        // Old code only checked for "Pack" suffix, so individual trade items like Sugshrimp,
+        // Bonefish, Agility Stone, etc. were only giving 1. Now we check whether the item
+        // maps to an equipment type (WEAPON_, HELM_, etc.) - if yes, give 1; otherwise give 10.
         private int DetermineItemQuantity(string itemName)
         {
-            if (itemName.EndsWith("Pack"))
+            // Equipment items should only give 1 (weapons, armor, accessories)
+            if (ItemNameMapping.TryGetValue(itemName, out string gameItemName))
             {
-                if (itemName.Contains("Badge") || itemName.Contains("Cluster") ||
-                    itemName.Contains("Ingot") || itemName.Contains("Bond"))
+                string[] equipmentPrefixes = { "WEAPON_", "HELM_", "CHESTPIECE_", "LEGGINGS_", "CAPE_", "SHIELD_", "RING_" };
+                foreach (string prefix in equipmentPrefixes)
                 {
-                    return 3;
+                    if (gameItemName.Contains(prefix))
+                        return 1;  // Equipment: always 1
                 }
-                return 5;
             }
-            return 1;
+            return 10;  // All filler (consumables, trade items, fish, ores, etc.): always 10
+        }
+
+        // NEW: Helper for Progressive Equipment - returns all equipment from ItemNameMapping
+        // whose level requirement is at or below the given player level.
+        // Parses the "(lv-XX)" prefix from each equipment entry's game item name.
+        private List<KeyValuePair<string, string>> GetEquipmentForLevel(int playerLevel)
+        {
+            var eligible = new List<KeyValuePair<string, string>>();
+            string[] equipmentPrefixes = { "WEAPON_", "HELM_", "CHESTPIECE_", "LEGGINGS_", "CAPE_", "SHIELD_", "RING_" };
+
+            foreach (var kvp in ItemNameMapping)
+            {
+                string gameItemName = kvp.Value;
+
+                // Check if this is an equipment item
+                bool isEquipment = false;
+                foreach (string prefix in equipmentPrefixes)
+                {
+                    if (gameItemName.Contains(prefix))
+                    {
+                        isEquipment = true;
+                        break;
+                    }
+                }
+                if (!isEquipment) continue;
+
+                // Parse level requirement from format "(lv-XX) TYPE_Name"
+                int itemLevel = 0;
+                if (gameItemName.StartsWith("(lv-"))
+                {
+                    int endIndex = gameItemName.IndexOf(')');
+                    if (endIndex > 4)
+                    {
+                        string levelStr = gameItemName.Substring(4, endIndex - 4);
+                        int.TryParse(levelStr, out itemLevel);
+                    }
+                }
+
+                // Include if player level is high enough
+                if (itemLevel <= playerLevel)
+                {
+                    eligible.Add(kvp);
+                }
+            }
+
+            Logger.LogInfo($"[AtlyssAP] Found {eligible.Count} eligible equipment pieces for level {playerLevel}");
+            return eligible;
         }
 
         private void GiveCurrency(int amount)

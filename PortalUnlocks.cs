@@ -462,49 +462,26 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // UPDATED: Now locks all 11 portal scenes based on area access mode
+        // Both Progressive and Random portal modes lock all portals at startup.
+        // Progressive: unlocked via "Progressive Portal" item counter
+        // Random: unlocked via individual portal items
         public void ApplyAreaAccessMode()
         {
-            if (basePlugin.areaAccessOption == 1) // Unlocked
-            {
-                StaticLogger.LogInfo("[AtlyssAP] Area Access: Unlocked - Opening all areas");
-                lockedScenes.Clear();
-                basePlugin.SendAPChatMessage("<color=#00FFFF>All areas unlocked!</color>");
-            }
-            else if (basePlugin.areaAccessOption == 0) // Locked - all 11 portals required independently
-            {
-                StaticLogger.LogInfo("[AtlyssAP] Area Access: Locked - All 11 portals required");
+            string mode = basePlugin.randomPortalsEnabled ? "Random Portals" : "Progressive Portals";
+            StaticLogger.LogInfo($"[AtlyssAP] Portal Mode: {mode} - Locking all portals");
 
-                // Lock all 11 portal scenes
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity");
-                BlockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentKeep.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity");
-                BlockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
-            }
-            else if (basePlugin.areaAccessOption == 2) // Progressive - portals unlock in sequence
-            {
-                StaticLogger.LogInfo("[AtlyssAP] Area Access: Progressive - Portals unlock in sequence");
-
-                // Lock all 11 portal scenes (will unlock progressively as portals are received)
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity");
-                BlockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentKeep.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity");
-                BlockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
-                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity");
-            }
+            // Lock all 11 portal scenes (will unlock as portal items are received)
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity");
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity");
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity");
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity");
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity");
+            BlockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity");
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentKeep.unity");
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity");
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity");
+            BlockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
         }
 
         public void BlockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
