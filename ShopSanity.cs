@@ -44,10 +44,9 @@ namespace AtlyssArchipelagoWIP
             { "Rikko", (591345, 591349) }                       // _npc_Rikko
         };
 
-        // UPDATED: Changed from fixed tiers to a random range of 15-3000 crowns
-        // to reduce grinding needed for shop purchases
-        private const int SHOP_PRICE_MIN = 15;
-        private const int SHOP_PRICE_MAX = 3000;
+        // UPDATED: Structured shop prices — each merchant's 5 items get these
+        // prices shuffled randomly. Much more predictable than the old 15-3000 range.
+        private static readonly int[] SHOP_PRICE_TIERS = new int[] { 200, 400, 600, 800, 1000 };
 
         private class ShopAPItemInfo
         {
@@ -102,6 +101,20 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
+        /// <summary>
+        /// Shuffle an array in-place using Fisher-Yates algorithm.
+        /// </summary>
+        private void ShuffleArray(int[] array)
+        {
+            for (int i = array.Length - 1; i > 0; i--)
+            {
+                int j = UnityEngine.Random.Range(0, i + 1);
+                int temp = array[i];
+                array[i] = array[j];
+                array[j] = temp;
+            }
+        }
+
         private void ProcessScoutedLocations(ArchipelagoSession session, Dictionary<long, ScoutedItemInfo> scoutedLocations)
         {
             try
@@ -110,28 +123,46 @@ namespace AtlyssArchipelagoWIP
 
                 _logger.LogInfo($"[AtlyssAP] Processing {scoutedLocations.Count} scouted shop items");
 
-                int index = 0;
-                foreach (var kvp in scoutedLocations)
+                // UPDATED: Assign prices per merchant group.
+                // Each merchant's 5 items get the 5 price tiers (200/400/600/800/1000)
+                // shuffled randomly so pricing feels varied but stays affordable.
+                foreach (var merchantKvp in MERCHANT_LOCATION_RANGES)
                 {
-                    long locationId = kvp.Key;
-                    ScoutedItemInfo itemInfo = kvp.Value;
+                    string merchantName = merchantKvp.Key;
+                    long rangeStart = merchantKvp.Value.start;
+                    long rangeEnd = merchantKvp.Value.end;
 
-                    string itemName = session.Items.GetItemName(itemInfo.ItemId, itemInfo.ItemGame) ?? $"Item {itemInfo.ItemId}";
-                    string playerName = session.Players.GetPlayerName(itemInfo.Player) ?? $"Player {itemInfo.Player}";
+                    // Shuffle price tiers for this merchant
+                    int[] prices = (int[])SHOP_PRICE_TIERS.Clone();
+                    ShuffleArray(prices);
 
-                    int price = UnityEngine.Random.Range(SHOP_PRICE_MIN, SHOP_PRICE_MAX + 1);
-
-                    _scoutedShopItems[locationId] = new ShopAPItemInfo
+                    int priceIndex = 0;
+                    for (long locationId = rangeStart; locationId <= rangeEnd; locationId++)
                     {
-                        ItemName = itemName,
-                        FromPlayer = playerName,
-                        LocationId = locationId,
-                        Price = price,
-                        SlotNumber = -1
-                    };
+                        if (!scoutedLocations.TryGetValue(locationId, out ScoutedItemInfo itemInfo))
+                        {
+                            _logger.LogWarning($"[AtlyssAP] Missing scouted data for location {locationId}");
+                            priceIndex++;
+                            continue;
+                        }
 
-                    _logger.LogInfo($"[AtlyssAP] Scouted shop #{index + 1}: {itemName} from {playerName} ({price} crowns)");
-                    index++;
+                        string itemName = session.Items.GetItemName(itemInfo.ItemId, itemInfo.ItemGame) ?? $"Item {itemInfo.ItemId}";
+                        string playerName = session.Players.GetPlayerName(itemInfo.Player) ?? $"Player {itemInfo.Player}";
+
+                        int price = prices[priceIndex];
+
+                        _scoutedShopItems[locationId] = new ShopAPItemInfo
+                        {
+                            ItemName = itemName,
+                            FromPlayer = playerName,
+                            LocationId = locationId,
+                            Price = price,
+                            SlotNumber = -1
+                        };
+
+                        _logger.LogInfo($"[AtlyssAP] Scouted {merchantName} #{priceIndex + 1}: {itemName} from {playerName} ({price} crowns)");
+                        priceIndex++;
+                    }
                 }
 
                 _shopItemsInitialized = true;

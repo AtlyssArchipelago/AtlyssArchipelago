@@ -54,12 +54,19 @@ namespace AtlyssArchipelagoWIP
 
         private int goalOption = 3;
         public bool randomPortalsEnabled = false;
-        private int equipmentProgressionOption = 0;
+        // CHANGED: Renamed from equipmentProgressionOption to equipmentGatingOption
+        // Now tracks Gated (1) vs Random (0) equipment placement mode.
+        // Gated mode restricts equipment tiers to appropriate-level locations during seed generation (Python-side).
+        // Random mode allows equipment to appear anywhere. Both modes are purely seed-generation logic;
+        // the C# plugin just receives and stores equipment normally regardless of this setting.
+        private int equipmentGatingOption = 0;
         private bool shopSanityEnabled = false;
 
         // Progressive item counters (incremented each time a progressive item is received)
         private int progressivePortalCount = 0;
-        private int progressiveEquipmentTier = 0;  // 0=Tier1 only, 1=Tier2, 2=Tier3, 3=Tier4, 4=Tier5
+        // REMOVED: progressiveEquipmentTier counter - Progressive Equipment item no longer exists.
+        // Equipment distribution is now handled by Gated/Random item_rules during Python seed generation.
+        // The C# plugin just receives equipment items normally without needing to track tiers.
 
         // UPDATED: Expanded from 2 portals to 11 portals with dictionary tracking
         private Dictionary<string, bool> _portalItemsReceived = new Dictionary<string, bool>
@@ -347,108 +354,339 @@ namespace AtlyssArchipelagoWIP
             { "Soul Pearl", "TRADEITEM_Soul Pearl" },
             { "Experience Bond Pack", "TRADEITEM_Experience Bond" },
 
-            // Weapons
-            { "Wood Sword", "(lv-1) WEAPON_Wood Sword (Sword, Strength)" },
-            { "Wooden Bow", "(lv-1) WEAPON_Wooden Bow (Bow, Dexterity)" },
-            { "Wood Scepter", "(lv-1) WEAPON_Wood Scepter (Scepter, Mind)" },
+            // Weapons - Melee (One-Handed Sword/Mace, Strength)
             { "Crypt Blade", "(lv-2) WEAPON_Crypt Blade (Sword, Strength)" },
+            { "Femur Club", "(lv-2) WEAPON_Femur Club (Sword, Strength)" },
+            { "Ironbark Sword", "(lv-2) WEAPON_Ironbark Sword (Sword, Strength)" },
             { "Slimecrust Blade", "(lv-2) WEAPON_Slimecrust Blade (Sword, Strength)" },
-
             { "Gilded Sword", "(lv-4) WEAPON_Gilded Sword (Sword, Strength)" },
-            { "Mini Geist Scythe", "(lv-4) WEAPON_Mini Geist Scythe (Greatblade, Strength)" },
+            { "Splitbark Club", "(lv-4) WEAPON_Splitbark Club (Sword, Strength)" },
+            { "Demicrypt Blade", "(lv-6) WEAPON_Demicrypt Blade (Sword, Strength)" },
+            { "Dense Mace", "(lv-6) WEAPON_Dense Mace (Sword, Strength)" },
             { "Iron Sword", "(lv-6) WEAPON_Iron Sword (Sword, Strength)" },
-            { "Iron Bow", "(lv-6) WEAPON_Iron Bow (Bow, Dexterity)" },
-            { "Dense Hammer", "(lv-6) WEAPON_Dense Hammer (Hammer, Strength)" },
-            { "Dense Katars", "(lv-6) WEAPON_Dense Katars (Katars, Dexterity)" },
-
+            { "Dawn Mace", "(lv-8) WEAPON_Dawn Mace (Sword, Strength)" },
+            { "Rude Blade", "(lv-8) WEAPON_Rude Blade (Sword, Strength)" },
             { "Vile Blade", "(lv-8) WEAPON_Vile Blade (Sword, Strength)" },
-            { "Mekspear", "(lv-8) WEAPON_Mekspear (Polearm, Strength)" },
-            { "Menace Bow", "(lv-8) WEAPON_Menace Bow (Bow, Dexterity)" },
-            { "Cryptcall Bell", "(lv-8) WEAPON_Cryptcall Bell (Magic Bell, Mind)" },
-
-            { "Wizwand", "(lv-12) WEAPON_Wizwand (Scepter, Mind)" },
             { "Amberite Sword", "(lv-12) WEAPON_Amberite Sword (Sword, Strength)" },
-            { "Geistlord Claws", "(lv-12) WEAPON_Geistlord Claws (Katars, Dexterity)" },
-            { "Petrified Bow", "(lv-12) WEAPON_Petrified Bow (Bow, Dexterity)" },
-
-            { "Mithril Sword", "(lv-16) WEAPON_Mithril Sword (Sword, Strength)" },
-            { "Mithril Bow", "(lv-14) WEAPON_Mithril Bow (Bow, Dexterity)" },
-            { "Ragespear", "(lv-16) WEAPON_Ragespear (Polearm, Strength)" },
+            { "Nethercrypt Blade", "(lv-12) WEAPON_Nethercrypt Blade (Sword, Strength)" },
             { "Coldgeist Blade", "(lv-16) WEAPON_Coldgeist Blade (Sword, Strength)" },
-
-            { "Sapphite Spear", "(lv-18) WEAPON_Sapphite Spear (Polearm, Strength)" },
-            { "Colossus Tone", "(lv-18) WEAPON_Colossus Tone (Magic Bell, Mind)" },
-            { "Magitek Burstgun", "(lv-20) WEAPON_Magitek Burstgun (Shotgun, Dexterity)" },
-
+            { "Mithril Sword", "(lv-16) WEAPON_Mithril Sword (Sword, Strength)" },
+            { "Serrated Blade", "(lv-16) WEAPON_Serrated Blade (Sword, Strength)" },
+            { "Nulrok Mace", "(lv-20) WEAPON_Nulrok Mace (Sword, Strength)" },
             { "Firebreath Blade", "(lv-22) WEAPON_Firebreath Blade (Sword, Strength)" },
             { "Valdur Blade", "(lv-24) WEAPON_Valdur Blade (Sword, Strength)" },
-            { "Torrentius Longbow", "(lv-24) WEAPON_Torrentius Longbow (Bow, Dexterity)" },
-
-            { "Follycannon", "(lv-26) WEAPON_Follycannon (Shotgun, Dexterity)" },
             { "Fier Blade", "(lv-26) WEAPON_Fier Blade (Sword, Strength)" },
 
+            // Weapons - Hammers (Two-Handed Heavy Melee, Strength)
+            { "Slimek Axehammer", "(lv-4) WEAPON_Slimek Axehammer (Hammer, Strength)" },
+            { "Dense Hammer", "(lv-6) WEAPON_Dense Hammer (Hammer, Strength)" },
+            { "Iron Axehammer", "(lv-6) WEAPON_Iron Axehammer (Hammer, Strength)" },
+            { "Crypt Pounder", "(lv-8) WEAPON_Crypt Pounder (Hammer, Strength)" },
+            { "Quake Pummeler", "(lv-18) WEAPON_Quake Pummeler (Hammer, Strength)" },
+
+            // Weapons - Greatblades (Two-Handed Heavy Melee, Strength)
+            { "Mini Geist Scythe", "(lv-4) WEAPON_Mini Geist Scythe (Greatblade, Strength)" },
+            { "Geist Scythe", "(lv-6) WEAPON_Geist Scythe (Greatblade, Strength)" },
+            { "Stone Greatblade", "(lv-8) WEAPON_Stone Greatblade (Greatblade, Strength)" },
+            { "Amberite Warstar", "(lv-12) WEAPON_Amberite Warstar (Greatblade, Strength)" },
+            { "Dolkin's Axe", "(lv-12) WEAPON_Dolkin's Axe (Greatblade, Strength)" },
+            { "Poltergeist Scythe", "(lv-14) WEAPON_Poltergeist Scythe (Greatblade, Strength)" },
+            { "Coldgeist Punisher", "(lv-16) WEAPON_Coldgeist Punisher (Greatblade, Strength)" },
+            { "Deadwood Axe", "(lv-16) WEAPON_Deadwood Axe (Greatblade, Strength)" },
+            { "Mithril Greatsword", "(lv-16) WEAPON_Mithril Greatsword (Greatblade, Strength)" },
+            { "Deathknight Runeblade", "(lv-22) WEAPON_Deathknight Runeblade (Greatblade, Strength)" },
+            { "Ryzer Greataxe", "(lv-26) WEAPON_Ryzer Greataxe (Greatblade, Strength)" },
+
+            // Weapons - Polearms (Two-Handed, Strength)
+            { "Dense Spear", "(lv-6) WEAPON_Dense Spear (Polearm, Strength)" },
+            { "Iron Spear", "(lv-6) WEAPON_Iron Spear (Polearm, Strength)" },
+            { "Cryptsinge Halberd", "(lv-8) WEAPON_Cryptsinge Halberd (Polearm, Strength)" },
+            { "Mekspear", "(lv-8) WEAPON_Mekspear (Polearm, Strength)" },
+            { "Amberite Halberd", "(lv-12) WEAPON_Amberite Halberd (Polearm, Strength)" },
+            { "Necroroyal Halberd", "(lv-12) WEAPON_Necroroyal Halberd (Polearm, Strength)" },
+            { "Sinner Bardiche", "(lv-12) WEAPON_Sinner Bardiche (Polearm, Strength)" },
+            { "Mithril Halberd", "(lv-16) WEAPON_Mithril Halberd (Polearm, Strength)" },
+            { "Ragespear", "(lv-16) WEAPON_Ragespear (Polearm, Strength)" },
+            { "Serrated Spear", "(lv-16) WEAPON_Serrated Spear (Polearm, Strength)" },
+            { "Sapphite Spear", "(lv-18) WEAPON_Sapphite Spear (Polearm, Strength)" },
+            { "Nulrok Spear", "(lv-20) WEAPON_Nulrok Spear (Polearm, Strength)" },
+            { "Cryotribe Spear", "(lv-22) WEAPON_Cryotribe Spear (Polearm, Strength)" },
+            { "Flametribe Spear", "(lv-22) WEAPON_Flametribe Spear (Polearm, Strength)" },
+
+            // Weapons - Scepters (One-Handed, Mind)
+            { "Marrow Bauble", "(lv-2) WEAPON_Marrow Bauble (Scepter, Mind)" },
+            { "Splitbark Scepter", "(lv-2) WEAPON_Splitbark Scepter (Scepter, Mind)" },
+            { "Demicrypt Bauble", "(lv-6) WEAPON_Demicrypt Bauble (Scepter, Mind)" },
+            { "Iron Scepter", "(lv-6) WEAPON_Iron Scepter (Scepter, Mind)" },
+            { "Cryo Cane", "(lv-8) WEAPON_Cryo Cane (Scepter, Mind)" },
+            { "Slime Diva Baton", "(lv-8) WEAPON_Slime Diva Baton (Scepter, Mind)" },
+            { "Pyre Cane", "(lv-12) WEAPON_Pyre Cane (Scepter, Mind)" },
+            { "Wizwand", "(lv-12) WEAPON_Wizwand (Scepter, Mind)" },
+            { "Nethercrypt Bauble", "(lv-14) WEAPON_Nethercrypt Bauble (Scepter, Mind)" },
+            { "Aquapetal Staff", "(lv-16) WEAPON_Aquapetal Staff (Scepter, Mind)" },
+            { "Flamepetal Staff", "(lv-16) WEAPON_Flamepetal Staff (Scepter, Mind)" },
+            { "Mithril Scepter", "(lv-16) WEAPON_Mithril Scepter (Scepter, Mind)" },
+            { "Sapphite Scepter", "(lv-18) WEAPON_Sapphite Scepter (Scepter, Mind)" },
+            { "Voalstark Wand", "(lv-24) WEAPON_Voalstark Wand (Scepter, Mind)" },
+
+            // Weapons - Bells (Two-Handed, Mind)
+            { "Cryptcall Bell", "(lv-8) WEAPON_Cryptcall Bell (Magic Bell, Mind)" },
+            { "Iron Bell", "(lv-8) WEAPON_Iron Bell (Magic Bell, Mind)" },
+            { "Coldgeist Frostcaller", "(lv-16) WEAPON_Coldgeist Frostcaller (Magic Bell, Mind)" },
+            { "Mithril Bell", "(lv-16) WEAPON_Mithril Bell (Magic Bell, Mind)" },
+            { "Colossus Tone", "(lv-18) WEAPON_Colossus Tone (Magic Bell, Mind)" },
+            { "Sapphite Bell", "(lv-18) WEAPON_Sapphite Bell (Magic Bell, Mind)" },
+
+            // Weapons - Katars (Two-Handed, Dexterity)
+            { "Slimecrust Katars", "(lv-2) WEAPON_Slimecrust Katars (Katars, Dexterity)" },
+            { "Cryptsinge Katars", "(lv-4) WEAPON_Cryptsinge Katars (Katars, Dexterity)" },
+            { "Slimek Shivs", "(lv-4) WEAPON_Slimek Shivs (Katars, Dexterity)" },
+            { "Deathgel Shivs", "(lv-6) WEAPON_Deathgel Shivs (Katars, Dexterity)" },
+            { "Dense Katars", "(lv-6) WEAPON_Dense Katars (Katars, Dexterity)" },
+            { "Iron Katars", "(lv-8) WEAPON_Iron Katars (Katars, Dexterity)" },
+            { "Runic Katars", "(lv-10) WEAPON_Runic Katars (Katars, Dexterity)" },
+            { "Geistlord Claws", "(lv-12) WEAPON_Geistlord Claws (Katars, Dexterity)" },
+            { "Hellsludge Shivs", "(lv-14) WEAPON_Hellsludge Shivs (Katars, Dexterity)" },
+            { "Mithril Katars", "(lv-14) WEAPON_Mithril Katars (Katars, Dexterity)" },
+            { "Frostbite Claws", "(lv-16) WEAPON_Frostbite Claws (Katars, Dexterity)" },
+            { "Serrated Knuckles", "(lv-16) WEAPON_Serrated Knuckles (Katars, Dexterity)" },
+            { "Rummok Bladerings", "(lv-18) WEAPON_Rummok Bladerings (Katars, Dexterity)" },
+            { "Sapphite Katars", "(lv-18) WEAPON_Sapphite Katars (Katars, Dexterity)" },
+            { "Golemfist Katars", "(lv-20) WEAPON_Golemfist Katars (Katars, Dexterity)" },
+
+            // Weapons - Bows (Two-Handed Ranged, Dexterity)
+            { "Crypt Bow", "(lv-2) WEAPON_Crypt Bow (Bow, Dexterity)" },
+            { "Demicrypt Bow", "(lv-6) WEAPON_Demicrypt Bow (Bow, Dexterity)" },
+            { "Iron Bow", "(lv-6) WEAPON_Iron Bow (Bow, Dexterity)" },
+            { "Mekspike Bow", "(lv-8) WEAPON_Mekspike Bow (Bow, Dexterity)" },
+            { "Menace Bow", "(lv-8) WEAPON_Menace Bow (Bow, Dexterity)" },
+            { "Petrified Bow", "(lv-12) WEAPON_Petrified Bow (Bow, Dexterity)" },
+            { "Mithril Bow", "(lv-14) WEAPON_Mithril Bow (Bow, Dexterity)" },
+            { "Necroroyal Bow", "(lv-14) WEAPON_Necroroyal Bow (Bow, Dexterity)" },
+            { "Coldgeist Bow", "(lv-16) WEAPON_Coldgeist Bow (Bow, Dexterity)" },
+            { "Serrated Longbow", "(lv-16) WEAPON_Serrated Longbow (Bow, Dexterity)" },
+            { "Torrentius Longbow", "(lv-24) WEAPON_Torrentius Longbow (Bow, Dexterity)" },
+
+            // Weapons - Shotguns (Two-Handed Ranged, Dexterity)
+            { "Amberite Boomstick", "(lv-12) WEAPON_Amberite Boomstick (Shotgun, Dexterity)" },
+            { "Magitek Burstgun", "(lv-20) WEAPON_Magitek Burstgun (Shotgun, Dexterity)" },
+            { "Follycannon", "(lv-26) WEAPON_Follycannon (Shotgun, Dexterity)" },
+
             // Armor - Helms
-            { "Leather Cap", "(lv-1) HELM_Leather Cap" },
+            { "Agility Ears", "(lv-1) HELM_Agility Ears" },
+            { "Festive Hat", "(lv-1) HELM_Festive Hat" },
             { "Fishin Hat", "(lv-1) HELM_Fishin Hat" },
-            { "Iron Halo", "(lv-6) HELM_Iron Halo" },
+            { "Leather Cap", "(lv-1) HELM_Leather Cap" },
+            { "Newfold Halo", "(lv-1) HELM_Newfold Halo" },
+            { "Orefinder Hat", "(lv-1) HELM_Orefinder Hat" },
+            { "Spooky Hat", "(lv-1) HELM_Spooky Hat" },
+            { "Top Hat", "(lv-1) HELM_Top Hat" },
+            { "Wizard Hat", "(lv-1) HELM_Wizard Hat" },
+            { "Acolyte Hood", "(lv-4) HELM_Acolyte Hood" },
+            { "Cryptsinge Halo", "(lv-4) HELM_Cryptsinge Halo" },
+            { "Initiate Spectacles", "(lv-4) HELM_Initiate Spectacles" },
+            { "Demicrypt Halo", "(lv-6) HELM_Demicrypt Halo" },
             { "Dense Helm", "(lv-6) HELM_Dense Helm" },
             { "Diva Crown", "(lv-6) HELM_Diva Crown" },
+            { "Iron Halo", "(lv-6) HELM_Iron Halo" },
+            { "Necromancer Hood", "(lv-8) HELM_Necromancer Hood" },
             { "Geistlord Crown", "(lv-10) HELM_Geistlord Crown" },
+            { "Journeyman Spectacles", "(lv-10) HELM_Journeyman Spectacles" },
             { "Amberite Helm", "(lv-12) HELM_Amberite Helm" },
+            { "Focus Circlet", "(lv-12) HELM_Focus Circlet" },
+            { "Magistrate Circlet", "(lv-12) HELM_Magistrate Circlet" },
+            { "Rage Circlet", "(lv-12) HELM_Rage Circlet" },
+            { "Focusi Glasses", "(lv-14) HELM_Focusi Glasses" },
+            { "Nethercrypt Halo", "(lv-14) HELM_Nethercrypt Halo" },
+            { "Carbuncle Hat", "(lv-16) HELM_Carbuncle Hat" },
+            { "Geistlord Eye", "(lv-16) HELM_Geistlord Eye" },
+            { "Glyphgrift Halo", "(lv-16) HELM_Glyphgrift Halo" },
+            { "Jestercast Memory", "(lv-16) HELM_Jestercast Memory" },
+            { "Knightguard Halo", "(lv-16) HELM_Knightguard Halo" },
             { "Mithril Halo", "(lv-16) HELM_Mithril Halo" },
             { "Sapphite Mindhat", "(lv-18) HELM_Sapphite Mindhat" },
-            { "Wizlad Hood", "(lv-24) HELM_Wizlad Hood" },
+            { "Dire Helm", "(lv-22) HELM_Dire Helm" },
+            { "Druidic Halo", "(lv-22) HELM_Druidic Halo" },
+            { "Guardel Helm", "(lv-22) HELM_Guardel Helm" },
+            { "Leathen Cap", "(lv-22) HELM_Leathen Cap" },
+            { "Boarus Helm", "(lv-24) HELM_Boarus Helm" },
             { "Deathknight Helm", "(lv-24) HELM_Deathknight Helm" },
+            { "Emerock Halo", "(lv-24) HELM_Emerock Halo" },
+            { "Wizlad Hood", "(lv-24) HELM_Wizlad Hood" },
+            { "Boarus Torment", "(lv-26) HELM_Boarus Torment" },
 
-            // Armor - Chestpieces
-            { "Leather Top", "(lv-1) CHESTPIECE_Leather Top" },
-            { "Noble Shirt", "(lv-1) CHESTPIECE_Noble Shirt" },
-            { "Iron Chestpiece", "(lv-6) CHESTPIECE_Iron Chestpiece" },
-            { "Dense Chestpiece", "(lv-6) CHESTPIECE_Dense Chestpiece" },
-            { "Golem Chestpiece", "(lv-12) CHESTPIECE_Golem Chestpiece" },
-            { "Amberite Breastplate", "(lv-12) CHESTPIECE_Amberite Breastplate" },
-            { "Mithril Chestpiece", "(lv-16) CHESTPIECE_Mithril Chestpiece" },
-            { "King Breastplate", "(lv-16) CHESTPIECE_King Breastplate" },
-            { "Monolith Chestpiece", "(lv-18) CHESTPIECE_Monolith Chestpiece" },
-            { "Sapphite Guard", "(lv-18) CHESTPIECE_Sapphite Guard" },
-            { "Wizlad Robe", "(lv-24) CHESTPIECE_Wizlad Robe" },
-            { "Executioner Vestment", "(lv-24) CHESTPIECE_Executioner Vestment" },
-
-            // Armor - Leggings
-            { "Leather Britches", "(lv-1) LEGGINGS_Leather Britches" },
-            { "Dense Leggings", "(lv-6) LEGGINGS_Dense Leggings" },
-            { "Amberite Leggings", "(lv-12) LEGGINGS_Amberite Leggings" },
-            { "Lord Greaves", "(lv-12) LEGGINGS_Lord Greaves" },
-            { "King Greaves", "(lv-16) LEGGINGS_King Greaves" },
-            { "Sapphite Leggings", "(lv-18) LEGGINGS_Sapphite Leggings" },
-            { "Berserker Leggings", "(lv-18) LEGGINGS_Berserker Leggings" },
-            { "Executioner Leggings", "(lv-24) LEGGINGS_Executioner Leggings" },
-
-            // Accessories - Capes
-            { "Initiate Cloak", "(lv-4) CAPE_Initiate Cloak" },
+            // Armor - Capes
+            { "Initiate Cloak", "(lv-2) CAPE_Initiate Cloak" },
+            { "Slimewoven Cloak", "(lv-4) CAPE_Slimewoven Cloak" },
             { "Nokket Cloak", "(lv-6) CAPE_Nokket Cloak" },
+            { "Rugged Cloak", "(lv-6) CAPE_Rugged Cloak" },
             { "Regazuul Cape", "(lv-10) CAPE_Regazuul Cape" },
             { "Flux Cloak", "(lv-12) CAPE_Flux Cloak" },
+            { "Cozy Cloak", "(lv-14) CAPE_Cozy Cloak" },
+            { "Nethercrypt Cloak", "(lv-14) CAPE_Nethercrypt Cloak" },
+            { "Cobblerage Cloak", "(lv-16) CAPE_Cobblerage Cloak" },
+            { "Deathward Cape", "(lv-16) CAPE_Deathward Cape" },
+            { "Forlorn Cloak", "(lv-16) CAPE_Forlorn Cloak" },
+            { "Meshlink Cape", "(lv-16) CAPE_Meshlink Cape" },
+            { "Sagecaller Cape", "(lv-16) CAPE_Sagecaller Cape" },
+            { "Roudon Cape", "(lv-18) CAPE_Roudon Cape" },
+            { "Blueversa Cape", "(lv-20) CAPE_Blueversa Cape" },
+            { "Greenversa Cape", "(lv-20) CAPE_Greenversa Cape" },
             { "Nulversa Cape", "(lv-20) CAPE_Nulversa Cape" },
+            { "Redversa Cape", "(lv-20) CAPE_Redversa Cape" },
             { "Windgolem Cloak", "(lv-22) CAPE_Windgolem Cloak" },
+            { "Mekwar Drape", "(lv-24) CAPE_Mekwar Drape" },
 
-            // Accessories - Shields
+            // Armor - Chestpieces
+            { "Aero Top", "(lv-1) CHESTPIECE_Aero Top" },
+            { "Bunhost Garb", "(lv-1) CHESTPIECE_Bunhost Garb" },
+            { "Festive Coat", "(lv-1) CHESTPIECE_Festive Coat" },
+            { "Fisher Overalls", "(lv-1) CHESTPIECE_Fisher Overalls" },
+            { "Leather Top", "(lv-1) CHESTPIECE_Leather Top" },
+            { "Necro Marrow", "(lv-1) CHESTPIECE_Necro Marrow" },
+            { "Noble Shirt", "(lv-1) CHESTPIECE_Noble Shirt" },
+            { "Nutso Top", "(lv-1) CHESTPIECE_Nutso Top" },
+            { "Orefinder Vest", "(lv-1) CHESTPIECE_Orefinder Vest" },
+            { "Ritualist Garb", "(lv-1) CHESTPIECE_Ritualist Garb" },
+            { "Sagecloth Top", "(lv-1) CHESTPIECE_Sagecloth Top" },
+            { "Silken Top", "(lv-1) CHESTPIECE_Silken Top" },
+            { "Spooky Garment", "(lv-1) CHESTPIECE_Spooky Garment" },
+            { "Vampiric Coat", "(lv-1) CHESTPIECE_Vampiric Coat" },
+            { "Ghostly Tabard", "(lv-2) CHESTPIECE_Ghostly Tabard" },
+            { "Poacher Cloth", "(lv-2) CHESTPIECE_Poacher Cloth" },
+            { "Ragged Shirt", "(lv-2) CHESTPIECE_Ragged Shirt" },
+            { "Slimecrust Chest", "(lv-2) CHESTPIECE_Slimecrust Chest" },
+            { "Worn Robe", "(lv-2) CHESTPIECE_Worn Robe" },
+            { "Cryptsinge Chest", "(lv-4) CHESTPIECE_Cryptsinge Chest" },
+            { "Journeyman Vest", "(lv-4) CHESTPIECE_Journeyman Vest" },
+            { "Slimek Chest", "(lv-4) CHESTPIECE_Slimek Chest" },
+            { "Dense Chestpiece", "(lv-6) CHESTPIECE_Dense Chestpiece" },
+            { "Trodd Tunic", "(lv-6) CHESTPIECE_Trodd Tunic" },
+            { "Iron Chestpiece", "(lv-7) CHESTPIECE_Iron Chestpiece" },
+            { "Tattered Battlerobe", "(lv-8) CHESTPIECE_Tattered Battlerobe" },
+            { "Apprentice Robe", "(lv-10) CHESTPIECE_Apprentice Robe" },
+            { "Duelist Garb", "(lv-10) CHESTPIECE_Duelist Garb" },
+            { "Skywrill Tabard", "(lv-10) CHESTPIECE_Skywrill Tabard" },
+            { "Sleeper's Robe", "(lv-10) CHESTPIECE_Sleeper's Robe" },
+            { "Warrior Chest", "(lv-10) CHESTPIECE_Warrior Chest" },
+            { "Amberite Breastplate", "(lv-12) CHESTPIECE_Amberite Breastplate" },
+            { "Golem Chestpiece", "(lv-12) CHESTPIECE_Golem Chestpiece" },
+            { "Lord Breastplate", "(lv-12) CHESTPIECE_Lord Breastplate" },
+            { "Nethercrypt Tabard", "(lv-12) CHESTPIECE_Nethercrypt Tabard" },
+            { "Reapsow Garb", "(lv-12) CHESTPIECE_Reapsow Garb" },
+            { "Witchlock Robe", "(lv-12) CHESTPIECE_Witchlock Robe" },
+            { "Chainmail Guard", "(lv-14) CHESTPIECE_Chainmail Guard" },
+            { "Ornamented Battlerobe", "(lv-14) CHESTPIECE_Ornamented Battlerobe" },
+            { "Carbuncle Robe", "(lv-16) CHESTPIECE_Carbuncle Robe" },
+            { "Chainscale Chest", "(lv-16) CHESTPIECE_Chainscale Chest" },
+            { "Gemveil Raiment", "(lv-16) CHESTPIECE_Gemveil Raiment" },
+            { "King Breastplate", "(lv-16) CHESTPIECE_King Breastplate" },
+            { "Mercenary Vestment", "(lv-16) CHESTPIECE_Mercenary Vestment" },
+            { "Mithril Chestpiece", "(lv-16) CHESTPIECE_Mithril Chestpiece" },
+            { "Reaper Gi", "(lv-16) CHESTPIECE_Reaper Gi" },
+            { "Witchwizard Robe", "(lv-16) CHESTPIECE_Witchwizard Robe" },
+            { "Berserker Chestpiece", "(lv-18) CHESTPIECE_Berserker Chestpiece" },
+            { "Fuguefall Duster", "(lv-18) CHESTPIECE_Fuguefall Duster" },
+            { "Magilord Overalls", "(lv-18) CHESTPIECE_Magilord Overalls" },
+            { "Monolith Chestpiece", "(lv-18) CHESTPIECE_Monolith Chestpiece" },
+            { "Sapphite Guard", "(lv-18) CHESTPIECE_Sapphite Guard" },
+            { "Druidic Robe", "(lv-20) CHESTPIECE_Druidic Robe" },
+            { "Emerock Chestpiece", "(lv-20) CHESTPIECE_Emerock Chestpiece" },
+            { "Fortified Vestment", "(lv-20) CHESTPIECE_Fortified Vestment" },
+            { "Roudon Chestpiece", "(lv-20) CHESTPIECE_Roudon Chestpiece" },
+            { "Earthbind Tabard", "(lv-22) CHESTPIECE_Earthbind Tabard" },
+            { "Gemveil Breastplate", "(lv-22) CHESTPIECE_Gemveil Breastplate" },
+            { "Roudon Robe", "(lv-22) CHESTPIECE_Roudon Robe" },
+            { "Ruggrok Vest", "(lv-22) CHESTPIECE_Ruggrok Vest" },
+            { "Executioner Vestment", "(lv-24) CHESTPIECE_Executioner Vestment" },
+            { "Fender Garb", "(lv-24) CHESTPIECE_Fender Garb" },
+            { "Wizlad Robe", "(lv-24) CHESTPIECE_Wizlad Robe" },
+
+            // Armor - Leggings
+            { "Aero Pants", "(lv-1) LEGGINGS_Aero Pants" },
+            { "Bunhost Leggings", "(lv-1) LEGGINGS_Bunhost Leggings" },
+            { "Festive Trousers", "(lv-1) LEGGINGS_Festive Trousers" },
+            { "Leather Britches", "(lv-1) LEGGINGS_Leather Britches" },
+            { "Necro Caustics", "(lv-1) LEGGINGS_Necro Caustics" },
+            { "Noble Pants", "(lv-1) LEGGINGS_Noble Pants" },
+            { "Nutso Pants", "(lv-1) LEGGINGS_Nutso Pants" },
+            { "Orefinder Trousers", "(lv-1) LEGGINGS_Orefinder Trousers" },
+            { "Ritualist Straps", "(lv-1) LEGGINGS_Ritualist Straps" },
+            { "Sagecloth Shorts", "(lv-1) LEGGINGS_Sagecloth Shorts" },
+            { "Silken Loincloth", "(lv-1) LEGGINGS_Silken Loincloth" },
+            { "Vampiric Leggings", "(lv-1) LEGGINGS_Vampiric Leggings" },
+            { "Ghostly Legwraps", "(lv-2) LEGGINGS_Ghostly Legwraps" },
+            { "Journeyman Shorts", "(lv-2) LEGGINGS_Journeyman Shorts" },
+            { "Slimecrust Leggings", "(lv-2) LEGGINGS_Slimecrust Leggings" },
+            { "Journeyman Leggings", "(lv-4) LEGGINGS_Journeyman Leggings" },
+            { "Slimek Leggings", "(lv-4) LEGGINGS_Slimek Leggings" },
+            { "Dense Leggings", "(lv-6) LEGGINGS_Dense Leggings" },
+            { "Sash Leggings", "(lv-8) LEGGINGS_Sash Leggings" },
+            { "Warrior Leggings", "(lv-10) LEGGINGS_Warrior Leggings" },
+            { "Amberite Leggings", "(lv-12) LEGGINGS_Amberite Leggings" },
+            { "Chainmail Leggings", "(lv-12) LEGGINGS_Chainmail Leggings" },
+            { "Darkcloth Pants", "(lv-12) LEGGINGS_Darkcloth Pants" },
+            { "Lord Greaves", "(lv-12) LEGGINGS_Lord Greaves" },
+            { "Reapsow Pants", "(lv-12) LEGGINGS_Reapsow Pants" },
+            { "Witchlock Loincloth", "(lv-12) LEGGINGS_Witchlock Loincloth" },
+            { "King Greaves", "(lv-16) LEGGINGS_King Greaves" },
+            { "Mercenary Leggings", "(lv-16) LEGGINGS_Mercenary Leggings" },
+            { "Reaper Leggings", "(lv-16) LEGGINGS_Reaper Leggings" },
+            { "Stridebond Pants", "(lv-16) LEGGINGS_Stridebond Pants" },
+            { "Witchwizard Garterbelt", "(lv-16) LEGGINGS_Witchwizard Garterbelt" },
+            { "Berserker Leggings", "(lv-18) LEGGINGS_Berserker Leggings" },
+            { "Fuguefall Pants", "(lv-18) LEGGINGS_Fuguefall Pants" },
+            { "Magilord Boots", "(lv-18) LEGGINGS_Magilord Boots" },
+            { "Sapphite Leggings", "(lv-18) LEGGINGS_Sapphite Leggings" },
+            { "Jadewail Trousers", "(lv-20) LEGGINGS_Jadewail Trousers" },
+            { "Temrak Britches", "(lv-20) LEGGINGS_Temrak Britches" },
+            { "Eschek Greaves", "(lv-22) LEGGINGS_Eschek Greaves" },
+            { "Gemveil Leggings", "(lv-22) LEGGINGS_Gemveil Leggings" },
+            { "Executioner Leggings", "(lv-24) LEGGINGS_Executioner Leggings" },
+            { "Fender Leggings", "(lv-24) LEGGINGS_Fender Leggings" },
+
+            // Armor - Shields
             { "Wooden Shield", "(lv-1) SHIELD_Wooden Shield" },
-            { "Iron Shield", "(lv-6) SHIELD_Iron Shield" },
+            { "Crypt Buckler", "(lv-4) SHIELD_Crypt Buckler" },
+            { "Slimek Shield", "(lv-4) SHIELD_Slimek Shield" },
+            { "Demicrypt Buckler", "(lv-6) SHIELD_Demicrypt Buckler" },
             { "Dense Shield", "(lv-6) SHIELD_Dense Shield" },
+            { "Iron Shield", "(lv-6) SHIELD_Iron Shield" },
+            { "Iris Shield", "(lv-8) SHIELD_Iris Shield" },
+            { "Omen Shield", "(lv-8) SHIELD_Omen Shield" },
             { "Amberite Shield", "(lv-12) SHIELD_Amberite Shield" },
+            { "Slabton Shield", "(lv-12) SHIELD_Slabton Shield" },
+            { "Mithril Shield", "(lv-14) SHIELD_Mithril Shield" },
+            { "Nethercrypt Shield", "(lv-14) SHIELD_Nethercrypt Shield" },
+            { "Rustweary Shield", "(lv-16) SHIELD_Rustweary Shield" },
+            { "Rustwise Shield", "(lv-16) SHIELD_Rustwise Shield" },
             { "Sapphite Shield", "(lv-18) SHIELD_Sapphite Shield" },
+            { "Rigor Buckler", "(lv-20) SHIELD_Rigor Buckler" },
+            { "Daemon Shield", "(lv-22) SHIELD_Daemon Shield" },
+            { "Irisun Shield", "(lv-22) SHIELD_Irisun Shield" },
 
-            // Accessories - Rings
+            // Accessories - Trinkets (Rings)
             { "Old Ring", "(lv-1) RING_Old Ring" },
             { "Ring Of Ambition", "(lv-1) RING_Ring Of Ambition" },
-            { "Sapphireweave Ring", "(lv-6) RING_Sapphireweave Ring" },
-            { "Emeraldfocus Ring", "(lv-6) RING_Emeraldfocus Ring" },
+            { "Nograd's Amulet", "(lv-2) RING_Nograd's Amulet" },
+            { "The One Ring", "(lv-2) RING_The One Ring" },
             { "Ambersquire Ring", "(lv-6) RING_Ambersquire Ring" },
+            { "Emeraldfocus Ring", "(lv-6) RING_Emeraldfocus Ring" },
+            { "Sapphireweave Ring", "(lv-6) RING_Sapphireweave Ring" },
+            { "Edon's Pendant", "(lv-8) RING_Edon's Pendant" },
             { "Geistlord Ring", "(lv-12) RING_Geistlord Ring" },
+            { "Students Ring", "(lv-12) RING_Students Ring" },
+            { "Pearlpond Ring", "(lv-14) RING_Pearlpond Ring" },
+            { "Slitherwraith Ring", "(lv-14) RING_Slitherwraith Ring" },
             { "Geistlord Band", "(lv-16) RING_Geistlord Band" },
+            { "Jadetrout Ring", "(lv-16) RING_Jadetrout Ring" },
+            { "Orbos Ring", "(lv-16) RING_Orbos Ring" },
             { "Valor Ring", "(lv-16) RING_Valor Ring" },
+            { "Earthwoken Ring", "(lv-18) RING_Earthwoken Ring" },
+            { "Noji Talisman", "(lv-20) RING_Noji Talisman" },
             { "Valdur Effigy", "(lv-24) RING_Valdur Effigy" },
+            { "Glyphik Booklet", "(lv-26) RING_Glyphik Booklet" },
+            { "Tessellated Drive", "(lv-26) RING_Tessellated Drive" },
 
             // NEW: Trade Items - Monster Drops (139 items added)
             { "Aqua Muchroom Cap", "TRADEITEM_Aqua Muchroom Cap" },
@@ -556,7 +794,7 @@ namespace AtlyssArchipelagoWIP
             cfgDeathlink = Config.Bind("Connection", "DeathLink", false,
                 "If DeathLink should be enabled (can be changed ingame).");
             Logger.LogInfo("=== [AtlyssAP] Plugin loaded! Version 1.3.1 ===");
-            Logger.LogInfo("[AtlyssAP] ALL QUESTS + Commands + Item Drops + 261 ITEMS + 50 Shop Locations!"); // UPDATED
+            Logger.LogInfo("[AtlyssAP] ALL QUESTS + Commands + Item In Spike Storage + 419 ITEMS (304 Equipment) + 50 Shop Locations!");
             Logger.LogInfo("[AtlyssAP] Press F5 to connect to Archipelago");
 
             _harmony = new Harmony("com.azrael.atlyss.ap.harmony");
@@ -893,10 +1131,16 @@ namespace AtlyssArchipelagoWIP
                             randomPortalsEnabled = Convert.ToInt32(slotData["random_portals"]) == 1;
                             Logger.LogInfo($"[AtlyssAP] Portal Mode: {(randomPortalsEnabled ? "Random Portals" : "Progressive Portals")}");
                         }
+                        // CHANGED: Updated equipment slot data reading for Gated/Random system.
+                        // Was: equipmentProgressionOption with "Progressive" vs "Random" logging.
+                        // Now: equipmentGatingOption with "Gated" vs "Random" logging.
+                        // The slot data key "equipment_progression" stays the same (matches Python options.py).
+                        // Value 0 = Random (equipment placed anywhere), Value 1 = Gated (equipment restricted by location tier).
+                        // This is purely informational on the C# side - gating is enforced during seed generation in Python.
                         if (slotData.ContainsKey("equipment_progression"))
                         {
-                            equipmentProgressionOption = Convert.ToInt32(slotData["equipment_progression"]);
-                            Logger.LogInfo($"[AtlyssAP] Equipment: {(equipmentProgressionOption == 1 ? "Progressive" : "Random")}");
+                            equipmentGatingOption = Convert.ToInt32(slotData["equipment_progression"]);
+                            Logger.LogInfo($"[AtlyssAP] Equipment: {(equipmentGatingOption == 1 ? "Gated" : "Random")}");
                         }
                         if (slotData.ContainsKey("shop_sanity"))
                         {
@@ -944,7 +1188,7 @@ namespace AtlyssArchipelagoWIP
                 if (IsNewSession(newSessionId))
                 {
                     Logger.LogInfo("[AtlyssAP] New AP session detected - clearing storage");
-                    ArchipelagoSpikeStorage.ClearAllAPBanks();
+                    ArchipelagoSpikeStorage.ClearAPSession();
                     SaveSessionId(newSessionId);
                 }
                 currentSessionId = newSessionId;
@@ -1043,7 +1287,8 @@ namespace AtlyssArchipelagoWIP
 
                 // Reset progressive counters
                 progressivePortalCount = 0;
-                progressiveEquipmentTier = 0;
+                // REMOVED: progressiveEquipmentTier reset - Progressive Equipment no longer exists.
+                // Equipment is now distributed via Gated/Random item_rules during Python seed generation.
 
                 // NEW: Reset shop sanity state
                 _shopSanity.Reset();
@@ -1163,72 +1408,15 @@ namespace AtlyssArchipelagoWIP
                     return;
                 }
 
-                // === PROGRESSIVE EQUIPMENT ===
-                // FIX: Now actually grants a random equipment piece at or below the player's current level.
-                // Old code only incremented a counter and showed a chat message without giving any item.
-                // New code reads the player's level, filters all equipment from ItemNameMapping,
-                // picks one randomly, creates ItemData via CreateItemData, and adds it to Spike storage.
-                if (itemName == "Progressive Equipment")
-                {
-                    progressiveEquipmentTier++;
-                    Logger.LogInfo($"[AtlyssAP] Progressive Equipment received (#{progressiveEquipmentTier})");
-
-                    try
-                    {
-                        // Get the player's current level
-                        int playerLevel = 1;
-                        Player localPlayer = Player._mainPlayer;
-                        if (localPlayer != null)
-                        {
-                            PlayerStats stats = localPlayer.GetComponent<PlayerStats>();
-                            if (stats != null)
-                            {
-                                playerLevel = stats.Network_currentLevel;
-                            }
-                        }
-
-                        // Pick a random equipment piece at or below player level
-                        var eligible = GetEquipmentForLevel(playerLevel);
-                        if (eligible.Count > 0)
-                        {
-                            int randomIndex = UnityEngine.Random.Range(0, eligible.Count);
-                            var chosen = eligible[randomIndex];
-                            string chosenItemName = chosen.Key;
-                            string chosenGameName = chosen.Value;
-
-                            Logger.LogInfo($"[AtlyssAP] Progressive Equipment chose: {chosenItemName} (player level {playerLevel})");
-
-                            ItemData itemData = CreateItemData(chosenGameName, 1);
-                            if (itemData != null)
-                            {
-                                if (ArchipelagoSpikeStorage.AddItemToAPSpike(itemData))
-                                {
-                                    SendAPChatMessage($"<color=#FFD700>Progressive Equipment: {chosenItemName}!</color> Check Spike's storage!");
-                                    Logger.LogInfo($"[AtlyssAP] Added {chosenItemName} to Spike storage");
-                                }
-                                else
-                                {
-                                    Logger.LogWarning($"[AtlyssAP] Failed to add {chosenItemName} to storage - banks full!");
-                                    SendAPChatMessage($"<color=red>Storage full! Could not store {chosenItemName}</color>");
-                                }
-                            }
-                            else
-                            {
-                                Logger.LogWarning($"[AtlyssAP] Could not create ItemData for: {chosenItemName}");
-                            }
-                        }
-                        else
-                        {
-                            Logger.LogWarning($"[AtlyssAP] No eligible equipment found for level {playerLevel}!");
-                            SendAPChatMessage($"<color=red>Progressive Equipment: No gear available for level {playerLevel}!</color>");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError($"[AtlyssAP] Error processing Progressive Equipment: {ex.Message}");
-                    }
-                    return;
-                }
+                // REMOVED: Entire "Progressive Equipment" handling block.
+                // Progressive Equipment item no longer exists in the item pool.
+                // Equipment distribution is now controlled by the Gated/Random option in Python:
+                //   - Gated mode: item_rules restrict equipment tiers to appropriate-level locations during seed generation
+                //   - Random mode: equipment can appear at any location
+                // In both modes, the C# plugin simply receives equipment items normally and stores them in Spike.
+                // The old code incremented progressiveEquipmentTier, picked random equipment based on player level,
+                // and added it to storage. This is no longer needed since actual equipment items are placed directly
+                // in the seed by the Python randomizer.
 
                 // === INDIVIDUAL PORTAL ITEMS (Random Portals mode only) ===
                 if (_portalItemsReceived.ContainsKey(itemName))
@@ -1410,52 +1598,11 @@ namespace AtlyssArchipelagoWIP
             return 10;  // All filler (consumables, trade items, fish, ores, etc.): always 10
         }
 
-        // NEW: Helper for Progressive Equipment - returns all equipment from ItemNameMapping
-        // whose level requirement is at or below the given player level.
-        // Parses the "(lv-XX)" prefix from each equipment entry's game item name.
-        private List<KeyValuePair<string, string>> GetEquipmentForLevel(int playerLevel)
-        {
-            var eligible = new List<KeyValuePair<string, string>>();
-            string[] equipmentPrefixes = { "WEAPON_", "HELM_", "CHESTPIECE_", "LEGGINGS_", "CAPE_", "SHIELD_", "RING_" };
-
-            foreach (var kvp in ItemNameMapping)
-            {
-                string gameItemName = kvp.Value;
-
-                // Check if this is an equipment item
-                bool isEquipment = false;
-                foreach (string prefix in equipmentPrefixes)
-                {
-                    if (gameItemName.Contains(prefix))
-                    {
-                        isEquipment = true;
-                        break;
-                    }
-                }
-                if (!isEquipment) continue;
-
-                // Parse level requirement from format "(lv-XX) TYPE_Name"
-                int itemLevel = 0;
-                if (gameItemName.StartsWith("(lv-"))
-                {
-                    int endIndex = gameItemName.IndexOf(')');
-                    if (endIndex > 4)
-                    {
-                        string levelStr = gameItemName.Substring(4, endIndex - 4);
-                        int.TryParse(levelStr, out itemLevel);
-                    }
-                }
-
-                // Include if player level is high enough
-                if (itemLevel <= playerLevel)
-                {
-                    eligible.Add(kvp);
-                }
-            }
-
-            Logger.LogInfo($"[AtlyssAP] Found {eligible.Count} eligible equipment pieces for level {playerLevel}");
-            return eligible;
-        }
+        // REMOVED: GetEquipmentForLevel helper method - no longer needed.
+        // Was used by Progressive Equipment to find eligible gear based on player level.
+        // Progressive Equipment item has been removed from the pool entirely.
+        // Equipment is now placed directly in the seed by the Python randomizer using
+        // Gated (tier-restricted by location level) or Random (unrestricted) item_rules.
 
         private void GiveCurrency(int amount)
         {

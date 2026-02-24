@@ -10,11 +10,86 @@ namespace AtlyssArchipelagoWIP
     {
         private const int NUM_BANKS = 7;
 
+        // FIXED: Reduced from 100 to 40. The game's storage UI uses the same
+        // grid size for ALL bank tabs (master and numbered). Items at slot 40+
+        // crash Create_StorageEntry with IndexOutOfRangeException because the
+        // UI entry array only has 40 elements.
+        private const int MASTER_BANK_SLOTS = 40;
+        private const int NUMBERED_BANK_SLOTS = 40;
+
+        // Total capacity: 40 (master) + 7*40 (numbered) = 320 slots
+        // More than enough for AP items
+
         [Serializable]
         public class ItemBankData
         {
             public List<ItemData> _heldItemStorage = new List<ItemData>();
         }
+
+        // ================================================================
+        // SESSION PERSISTENCE
+        // A marker file that tracks whether an AP session is active.
+        // This allows the file redirect patches to work BEFORE reconnecting
+        // so items persist across game restarts.
+        // ================================================================
+
+        private static string GetSessionMarkerPath()
+        {
+            string gameDataPath = Path.Combine(UnityEngine.Application.dataPath, "profileCollections");
+            return Path.Combine(gameDataPath, "ap_session_active");
+        }
+
+        /// <summary>
+        /// Returns true if an AP session was previously active (marker file exists).
+        /// Used by file redirect patches to load AP banks even before reconnecting.
+        /// </summary>
+        public static bool IsAPSessionActive()
+        {
+            return File.Exists(GetSessionMarkerPath());
+        }
+
+        /// <summary>
+        /// Called when connecting to AP server. Creates the marker file.
+        /// </summary>
+        public static void SetAPSessionActive()
+        {
+            try
+            {
+                string path = GetSessionMarkerPath();
+                string dir = Path.GetDirectoryName(path);
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                File.WriteAllText(path, DateTime.UtcNow.ToString("o"));
+                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] AP session marker set (storage will persist across restarts)");
+            }
+            catch (Exception ex)
+            {
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to set session marker: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Called when starting a NEW AP game/seed. Removes the marker and clears banks.
+        /// </summary>
+        public static void ClearAPSession()
+        {
+            try
+            {
+                string path = GetSessionMarkerPath();
+                if (File.Exists(path))
+                    File.Delete(path);
+                ClearAllAPBanks();
+                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] AP session cleared (marker removed, banks wiped)");
+            }
+            catch (Exception ex)
+            {
+                AtlyssArchipelagoPlugin.StaticLogger?.LogError($"[AtlyssAP] Failed to clear session: {ex.Message}");
+            }
+        }
+
+        // ================================================================
+        // BANK PATHS
+        // ================================================================
 
         public static string GetAPMasterBankPath()
         {
@@ -32,6 +107,10 @@ namespace AtlyssArchipelagoWIP
             string gameDataPath = Path.Combine(UnityEngine.Application.dataPath, "profileCollections");
             return Path.Combine(gameDataPath, $"atl_itemBank_ap_{bankNumber:D2}");
         }
+
+        // ================================================================
+        // BANK INITIALIZATION
+        // ================================================================
 
         public static void InitializeAPBanks()
         {
@@ -76,6 +155,79 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
+        // ================================================================
+        // BANK VALIDATION
+        // Fixes items with overlapping or out-of-bounds slot numbers.
+        // Called every time a bank is loaded to prevent IndexOutOfRangeException.
+        // ================================================================
+
+        /// <summary>
+        /// Validate and fix slot numbers in a bank. Reassigns any slots that are
+        /// out-of-bounds or overlapping. Returns true if any fixes were made.
+        /// </summary>
+        private static bool ValidateBank(ItemBankData bank, int maxSlots)
+        {
+            if (bank == null || bank._heldItemStorage == null || bank._heldItemStorage.Count == 0)
+                return false;
+
+            bool modified = false;
+            HashSet<int> usedSlots = new HashSet<int>();
+
+            foreach (var item in bank._heldItemStorage)
+            {
+                bool needsReassign = false;
+
+                // Check out-of-bounds
+                if (item._slotNumber < 0 || item._slotNumber >= maxSlots)
+                {
+                    needsReassign = true;
+                }
+                // Check overlap (duplicate slot number)
+                else if (usedSlots.Contains(item._slotNumber))
+                {
+                    needsReassign = true;
+                }
+
+                if (needsReassign)
+                {
+                    // Find next open slot
+                    int newSlot = 0;
+                    while (usedSlots.Contains(newSlot) && newSlot < maxSlots)
+                    {
+                        newSlot++;
+                    }
+
+                    if (newSlot < maxSlots)
+                    {
+                        AtlyssArchipelagoPlugin.StaticLogger?.LogWarning(
+                            $"[AtlyssAP] Fixing item '{item._itemName}' slot {item._slotNumber} -> {newSlot} (was out-of-bounds or overlapping)"
+                        );
+                        item._slotNumber = newSlot;
+                        modified = true;
+                    }
+                    else
+                    {
+                        // Bank is full — this item can't fit. Remove it.
+                        // (This shouldn't happen normally since we cap items per bank)
+                        AtlyssArchipelagoPlugin.StaticLogger?.LogWarning(
+                            $"[AtlyssAP] Bank full, cannot reassign item '{item._itemName}' — will be dropped"
+                        );
+                    }
+                }
+
+                usedSlots.Add(item._slotNumber);
+            }
+
+            // Remove items that couldn't be assigned valid slots
+            bank._heldItemStorage.RemoveAll(item => item._slotNumber < 0 || item._slotNumber >= maxSlots);
+
+            return modified;
+        }
+
+        // ================================================================
+        // BANK LOAD / SAVE
+        // ================================================================
+
         public static ItemBankData LoadAPBank(int bankNumber)
         {
             try
@@ -89,7 +241,16 @@ namespace AtlyssArchipelagoWIP
 
                 string json = File.ReadAllText(path);
                 ItemBankData bank = JsonConvert.DeserializeObject<ItemBankData>(json);
-                return bank ?? new ItemBankData();
+                bank = bank ?? new ItemBankData();
+
+                // Validate on load — fix any bad slot numbers
+                if (ValidateBank(bank, NUMBERED_BANK_SLOTS))
+                {
+                    SaveAPBank(bankNumber, bank);
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] Fixed slot numbers in AP bank {bankNumber}");
+                }
+
+                return bank;
             }
             catch (Exception ex)
             {
@@ -125,7 +286,16 @@ namespace AtlyssArchipelagoWIP
 
                 string json = File.ReadAllText(path);
                 ItemBankData bank = JsonConvert.DeserializeObject<ItemBankData>(json);
-                return bank ?? new ItemBankData();
+                bank = bank ?? new ItemBankData();
+
+                // Validate on load — fix any bad slot numbers
+                if (ValidateBank(bank, MASTER_BANK_SLOTS))
+                {
+                    SaveAPMasterBank(bank);
+                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Fixed slot numbers in AP master bank");
+                }
+
+                return bank;
             }
             catch (Exception ex)
             {
@@ -148,20 +318,22 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
+        // ================================================================
+        // ADD ITEM TO STORAGE
+        // ================================================================
+
         public static bool AddItemToAPSpike(ItemData itemToAdd)
         {
             try
             {
-                // CHANGED: Instead of filling the master bank first and only overflowing to
-                // numbered banks when master is full, we now:
-                // 1. Try to stack with existing items across ALL banks (if item is stackable)
-                // 2. If not stackable or no stack space, find the first open slot across ALL banks
-                // This distributes items more evenly and prevents the master tab from overflowing
-                // while other tabs sit empty.
+                // Strategy:
+                // 1. Try to stack with existing items across ALL banks (if stackable)
+                // 2. If not stackable or no stack space, find first open slot across ALL banks
+                // Master bank first, then numbered banks 1-7.
 
                 bool isStackable = itemToAdd._maxQuantity > 1;
 
-                // Step 1: Try stacking across all banks (master first, then 1-7)
+                // Step 1: Try stacking across all banks
                 if (isStackable)
                 {
                     // Try master bank stacking
@@ -214,11 +386,11 @@ namespace AtlyssArchipelagoWIP
                     }
                 }
 
-                // Step 2: Find first open slot across all banks (master first, then 1-7)
-                // Try master bank (100 slots)
+                // Step 2: Find first open slot across all banks
+                // Try master bank
                 {
                     ItemBankData masterBank = LoadAPMasterBank();
-                    int nextSlot = FindNextOpenSlot(masterBank, 100);
+                    int nextSlot = FindNextOpenSlot(masterBank, MASTER_BANK_SLOTS);
                     if (nextSlot >= 0)
                     {
                         itemToAdd._slotNumber = nextSlot;
@@ -233,11 +405,11 @@ namespace AtlyssArchipelagoWIP
                     }
                 }
 
-                // Try numbered banks (40 slots each)
+                // Try numbered banks
                 for (int bankNum = 1; bankNum <= NUM_BANKS; bankNum++)
                 {
                     ItemBankData bank = LoadAPBank(bankNum);
-                    int nextSlot = FindNextOpenSlot(bank, 40);
+                    int nextSlot = FindNextOpenSlot(bank, NUMBERED_BANK_SLOTS);
                     if (nextSlot >= 0)
                     {
                         itemToAdd._slotNumber = nextSlot;
@@ -266,7 +438,6 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // ADDED: Helper to find the next open slot in a bank, returns -1 if bank is full
         private static int FindNextOpenSlot(ItemBankData bank, int maxSlots)
         {
             HashSet<int> usedSlots = new HashSet<int>();
@@ -284,82 +455,9 @@ namespace AtlyssArchipelagoWIP
             return nextSlot < maxSlots ? nextSlot : -1;
         }
 
-        // NOTE: No longer called by AddItemToAPSpike (which now handles all banks itself),
-        // but kept for potential external use. Fixed stackability check.
-        private static bool TryAddToMasterBank(ItemData itemToAdd)
-        {
-            try
-            {
-                ItemBankData masterBank = LoadAPMasterBank();
-
-                // FIXED: Only try stacking for items that are actually stackable.
-                // Equipment has maxQuantity=1, so the old check (quantity < maxQuantity)
-                // was 1 < 1 = false, which worked by accident. But for safety, we now
-                // explicitly check maxQuantity > 1 to skip the stacking loop entirely
-                // for non-stackable items like weapons and armor.
-                bool isStackable = itemToAdd._maxQuantity > 1;
-                if (isStackable)
-                {
-                    foreach (var existingItem in masterBank._heldItemStorage)
-                    {
-                        if (existingItem._itemName == itemToAdd._itemName &&
-                            existingItem._quantity < existingItem._maxQuantity)
-                        {
-                            int spaceAvailable = existingItem._maxQuantity - existingItem._quantity;
-                            int amountToAdd = Math.Min(spaceAvailable, itemToAdd._quantity);
-
-                            existingItem._quantity += amountToAdd;
-                            itemToAdd._quantity -= amountToAdd;
-
-                            SaveAPMasterBank(masterBank);
-
-                            if (itemToAdd._quantity == 0)
-                            {
-                                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
-                                    $"[AtlyssAP] Added {itemToAdd._itemName} to AP Spike MASTER bank (stacked)"
-                                );
-                                return true;
-                            }
-                        }
-                    }
-                }
-
-                int nextSlot = 0;
-                HashSet<int> usedSlots = new HashSet<int>();
-                foreach (var item in masterBank._heldItemStorage)
-                {
-                    usedSlots.Add(item._slotNumber);
-                }
-
-                while (usedSlots.Contains(nextSlot))
-                {
-                    nextSlot++;
-                }
-
-                if (nextSlot < 100)
-                {
-                    itemToAdd._slotNumber = nextSlot;
-                    itemToAdd._isEquipped = false;
-
-                    masterBank._heldItemStorage.Add(itemToAdd);
-                    SaveAPMasterBank(masterBank);
-
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
-                        $"[AtlyssAP] Added {itemToAdd._itemName} to AP Spike MASTER bank slot {nextSlot}"
-                    );
-                    return true;
-                }
-
-                return false;
-            }
-            catch (Exception ex)
-            {
-                AtlyssArchipelagoPlugin.StaticLogger?.LogError(
-                    $"[AtlyssAP] Failed to add to master bank: {ex.Message}"
-                );
-                return false;
-            }
-        }
+        // ================================================================
+        // UTILITY
+        // ================================================================
 
         public static int GetTotalItemCount()
         {

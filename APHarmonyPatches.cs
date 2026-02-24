@@ -422,10 +422,6 @@ namespace AtlyssArchipelagoWIP
                 // Get the assembly where the icon is embedded
                 Assembly assembly = Assembly.GetExecutingAssembly();
 
-                // FIXED: Commented out unused variable to avoid compiler warning
-                // Resource name will be auto-detected in the loop below
-                // string resourceName = "Atlyss_AP.Archipelago.png-256x256_q95.png";
-
                 // Try to find the resource (case-sensitive)
                 string[] resourceNames = assembly.GetManifestResourceNames();
                 string foundResource = null;
@@ -467,7 +463,6 @@ namespace AtlyssArchipelagoWIP
                     }
 
                     // Create sprite from texture
-                    // Unity will automatically handle scaling the 256x256 image to whatever size the game needs
                     Sprite sprite = Sprite.Create(
                         texture,
                         new Rect(0, 0, texture.width, texture.height),
@@ -554,10 +549,6 @@ namespace AtlyssArchipelagoWIP
                 string npcName = __instance.gameObject.name;
 
                 // UPDATED: Fixed merchant names to match actual GameObject names
-                // fisher and dyeMerchant were using incorrect casing (now lowercase "fisher" and camelCase "dyeMerchant")
-                // List of all 10 merchants that have AP items
-                // Early game: Sally, Skrit, Frankie, Ruka, Fisher, Dye Merchant, Tesh, Nesh
-                // Late game (lvl 20-26): Cotoo, Rikko
                 string[] apMerchants = new string[]
                 {
                     "_npc_Sally",                       // General merchant (early)
@@ -589,7 +580,6 @@ namespace AtlyssArchipelagoWIP
                 }
 
                 AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] AP merchant shop opened: {npcName} - injecting items");
-                // FIXED: Removed second parameter (npcName) - method extracts it from __instance.gameObject.name internally
                 AtlyssArchipelagoPlugin.Instance._shopSanity.InjectAPShopItems(__instance);
             }
             catch (Exception ex)
@@ -602,7 +592,6 @@ namespace AtlyssArchipelagoWIP
 
     // NEW: Patch shop purchase to intercept AP item purchases
     // When player buys an AP item, we send the location check immediately instead of giving them the dummy item
-    // This replaces the old polling system with instant purchase detection
     [HarmonyPatch(typeof(ShopkeepManager), "Init_PurchaseItem")]
     public static class ShopPurchasePatch
     {
@@ -679,17 +668,43 @@ namespace AtlyssArchipelagoWIP
         }
     }
 
+    // ================================================================
+    // SPIKE STORAGE PATCHES
+    // Redirects the game's file I/O for item banks to AP-specific bank files.
+    // UPDATED: Now checks IsAPSessionActive() in addition to connected, so
+    // storage persists across game restarts without needing to reconnect first.
+    // ================================================================
+
     public class SpikePatch
     {
+        /// <summary>
+        /// Returns true if file redirects should be active.
+        /// Either currently connected OR a previous AP session's data exists.
+        /// </summary>
+        private static bool ShouldRedirect()
+        {
+            // If currently connected, always redirect
+            if (AtlyssArchipelagoPlugin.Instance != null && AtlyssArchipelagoPlugin.Instance.connected)
+                return true;
+
+            // If a previous AP session exists (marker file), redirect so saved
+            // items persist across game restarts before reconnecting
+            if (ArchipelagoSpikeStorage.IsAPSessionActive())
+                return true;
+
+            return false;
+        }
+
         [HarmonyPatch(typeof(File), nameof(File.ReadAllText), new Type[] { typeof(string) })]
         // Redirects Spike's bank loading code to load custom Archipelago item banks.
+        // UPDATED: Uses ShouldRedirect() instead of just checking connected
         public static class File_ReadAllText_Patch
         {
             static bool Prefix(ref string path, ref string __result)
             {
                 try
                 {
-                    if (AtlyssArchipelagoPlugin.Instance == null || !AtlyssArchipelagoPlugin.Instance.connected)
+                    if (!ShouldRedirect())
                     {
                         return true;
                     }
@@ -742,13 +757,14 @@ namespace AtlyssArchipelagoWIP
 
         [HarmonyPatch(typeof(File), nameof(File.WriteAllText), new Type[] { typeof(string), typeof(string) })]
         // Redirects Spike's bank saving code to save to custom Archipelago item banks.
+        // UPDATED: Uses ShouldRedirect() instead of just checking connected
         public static class File_WriteAllText_Patch
         {
             static bool Prefix(ref string path, string contents)
             {
                 try
                 {
-                    if (AtlyssArchipelagoPlugin.Instance == null || !AtlyssArchipelagoPlugin.Instance.connected)
+                    if (!ShouldRedirect())
                     {
                         return true;
                     }
@@ -788,10 +804,53 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
+        // NEW: Safety patch on Create_StorageEntry to prevent IndexOutOfRangeException.
+        // If an item has a slot number that exceeds the game's UI entry array, skip it
+        // instead of crashing. This handles any edge cases where stored data has bad slots.
+        [HarmonyPatch(typeof(ItemStorageManager), "Create_StorageEntry")]
+        public static class CreateStorageEntry_SafetyPatch
+        {
+            static bool Prefix(ItemStorageManager __instance, ItemData _itemData, ScriptableItem _scriptItem, int _index, int _slotNumber)
+            {
+                try
+                {
+                    // Get the storage entries array via reflection to check bounds
+                    var entriesField = typeof(ItemStorageManager).GetField("_currentStorageEntries",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+                    if (entriesField != null)
+                    {
+                        var entries = entriesField.GetValue(__instance) as Array;
+                        if (entries != null)
+                        {
+                            if (_slotNumber < 0 || _slotNumber >= entries.Length)
+                            {
+                                StaticLogger?.LogWarning(
+                                    $"[AtlyssAP] Skipping storage entry: slot {_slotNumber} out of bounds " +
+                                    $"(max {entries.Length}) for item '{_itemData?._itemName}'"
+                                );
+                                return false; // Skip this entry, don't crash
+                            }
+                        }
+                    }
+
+                    return true; // Proceed normally
+                }
+                catch (Exception ex)
+                {
+                    StaticLogger?.LogError($"[AtlyssAP] Create_StorageEntry safety check error: {ex.Message}");
+                    return true; // On reflection failure, let original code run
+                }
+            }
+        }
+
         public static void InitializeAPStorage()
         {
             try
             {
+                // UPDATED: Set session marker so storage persists across restarts
+                ArchipelagoSpikeStorage.SetAPSessionActive();
+
                 if (!ArchipelagoSpikeStorage.AreAPBanksInitialized())
                 {
                     ArchipelagoSpikeStorage.InitializeAPBanks();
