@@ -581,6 +581,70 @@ namespace AtlyssArchipelagoWIP
 
                 AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] AP merchant shop opened: {npcName} - injecting items");
                 AtlyssArchipelagoPlugin.Instance._shopSanity.InjectAPShopItems(__instance);
+
+                // FIXED: Force the ShopkeepManager to rebuild its display listing.
+                // Without this, the shop UI was built from the original vendor items
+                // before our AP items were injected. Items only appeared after buying
+                // something (which triggered a re-render). Now we explicitly re-trigger
+                // the listing rebuild so all AP items show immediately.
+                try
+                {
+                    var shopManager = ShopkeepManager._current;
+                    if (shopManager != null)
+                    {
+                        // Try the direct method first
+                        var beginMethod = typeof(ShopkeepManager).GetMethod("Begin_ShopkeepListing",
+                            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (beginMethod != null)
+                        {
+                            // Check parameter count — might take the NPC as argument, or no args
+                            var parameters = beginMethod.GetParameters();
+                            if (parameters.Length == 1)
+                            {
+                                beginMethod.Invoke(shopManager, new object[] { __instance });
+                                AtlyssArchipelagoPlugin.StaticLogger.LogInfo("[AtlyssAP] Refreshed shop display via Begin_ShopkeepListing(npc)");
+                            }
+                            else if (parameters.Length == 0)
+                            {
+                                beginMethod.Invoke(shopManager, null);
+                                AtlyssArchipelagoPlugin.StaticLogger.LogInfo("[AtlyssAP] Refreshed shop display via Begin_ShopkeepListing()");
+                            }
+                        }
+                        else
+                        {
+                            // Fallback: try other common method names
+                            string[] refreshMethods = { "Refresh_ShopListing", "Init_ShopListing",
+                                                        "Update_ShopListing", "Build_ShopListing",
+                                                        "Begin_ShopListing", "Set_ShopListing" };
+                            foreach (string methodName in refreshMethods)
+                            {
+                                var method = typeof(ShopkeepManager).GetMethod(methodName,
+                                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                                if (method != null)
+                                {
+                                    var p = method.GetParameters();
+                                    if (p.Length == 1 && p[0].ParameterType == typeof(NetNPC))
+                                    {
+                                        method.Invoke(shopManager, new object[] { __instance });
+                                        AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Refreshed shop display via {methodName}(npc)");
+                                        break;
+                                    }
+                                    else if (p.Length == 0)
+                                    {
+                                        method.Invoke(shopManager, null);
+                                        AtlyssArchipelagoPlugin.StaticLogger.LogInfo($"[AtlyssAP] Refreshed shop display via {methodName}()");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception refreshEx)
+                {
+                    AtlyssArchipelagoPlugin.StaticLogger.LogWarning($"[AtlyssAP] Could not refresh shop display: {refreshEx.Message}");
+                    // Non-fatal — items are still in vendor data, just might need a re-open to show
+                }
             }
             catch (Exception ex)
             {
@@ -668,12 +732,12 @@ namespace AtlyssArchipelagoWIP
         }
     }
 
-    // ================================================================
+    
     // SPIKE STORAGE PATCHES
     // Redirects the game's file I/O for item banks to AP-specific bank files.
     // UPDATED: Now checks IsAPSessionActive() in addition to connected, so
     // storage persists across game restarts without needing to reconnect first.
-    // ================================================================
+    
 
     public class SpikePatch
     {

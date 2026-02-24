@@ -19,6 +19,11 @@ namespace AtlyssArchipelagoWIP
 
         private List<string> lockedScenes = new List<string>();
 
+        // ADDED: Reverse lookup — maps locked portal data back to original data.
+        // Built once in Awake() from PortalDataToLockedData so we can restore
+        // portals in real-time when they get unlocked without a scene reload.
+        private Dictionary<PortalData, PortalData> LockedDataToPortalData = new Dictionary<PortalData, PortalData>();
+
         private Dictionary<PortalData, PortalData> PortalDataToLockedData = new Dictionary<PortalData, PortalData>() // a list of every basegame portal, and what data it should have when locked.
         {   
             // Here's a formatting example:
@@ -406,6 +411,13 @@ namespace AtlyssArchipelagoWIP
         {
             basePlugin = AtlyssArchipelagoPlugin.Instance;
             SceneManager.sceneLoaded += OnSceneLoaded; // when a scene is loaded, run EnforcePortalLocks. due to limitations with c#, this has to be through a helper function
+
+            // ADDED: Build the reverse lookup (locked data -> original data)
+            // so we can restore portals in real-time when they get unlocked
+            foreach (var kvp in PortalDataToLockedData)
+            {
+                LockedDataToPortalData[kvp.Value] = kvp.Key;
+            }
         }
 
         void OnSceneLoaded(Scene s, LoadSceneMode m) // we don't actually care about loadscenemode, but it needs to be here
@@ -462,6 +474,71 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
+        // ADDED: Refresh portals in the currently loaded scene without needing a reload.
+        // Called by UnblockAccessToScene after removing a scene from lockedScenes.
+        // Scans all portals in the active scene and restores any that were showing
+        // locked data back to their original portal data using the reverse lookup.
+        private void RefreshPortalsInCurrentScene()
+        {
+            Scene activeScene = SceneManager.GetActiveScene();
+            if (!activeScene.isLoaded)
+                return;
+
+            GameObject portalContainer = null;
+            foreach (var o in activeScene.GetRootGameObjects())
+            {
+                if (o.name == "_PORTALS" || o.name == "_PORTAL")
+                {
+                    portalContainer = o;
+                    break;
+                }
+            }
+
+            if (portalContainer == null)
+                return; // no portals in this scene, nothing to refresh
+
+            int restored = 0;
+            for (int i = 0; i < portalContainer.transform.childCount; i++)
+            {
+                Transform portal = portalContainer.transform.GetChild(i);
+                Portal portalComponent = portal.GetComponent<Portal>();
+                if (portalComponent == null)
+                    continue;
+
+                var portalData = portalComponent._scenePortal;
+
+                // only check portals that are currently showing as locked
+                if (!portalData._portalCaptionTitle.EndsWith("(Locked!)"))
+                    continue;
+
+                // build the locked PortalData to look up the original
+                PortalData currentLockedData = new PortalData
+                {
+                    portalCaption = portalData._portalCaptionTitle,
+                    spawnID = portalData._spawnPointTag,
+                    sceneName = portalData._subScene
+                };
+
+                if (LockedDataToPortalData.TryGetValue(currentLockedData, out PortalData originalData))
+                {
+                    // only restore if the destination scene is no longer locked
+                    if (!lockedScenes.Contains(originalData.sceneName))
+                    {
+                        portalData._portalCaptionTitle = originalData.portalCaption;
+                        portalData._spawnPointTag = originalData.spawnID;
+                        portalData._subScene = originalData.sceneName;
+                        restored++;
+                        StaticLogger.LogInfo($"[AtlyssAP] Portal restored in real-time: {originalData.portalCaption}");
+                    }
+                }
+            }
+
+            if (restored > 0)
+            {
+                StaticLogger.LogInfo($"[AtlyssAP] Refreshed {restored} portal(s) in {activeScene.name} without reload");
+            }
+        }
+
         // Both Progressive and Random portal modes lock all portals at startup.
         // Progressive: unlocked via "Progressive Portal" item counter
         // Random: unlocked via individual portal items
@@ -493,12 +570,18 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
+        // UPDATED: Now calls RefreshPortalsInCurrentScene after unlocking so
+        // portals update in real-time without needing the player to leave and reload
         public void UnblockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
         {
             if (lockedScenes.Contains(sceneName))
             {
                 lockedScenes.Remove(sceneName);
                 StaticLogger.LogInfo($"[AtlyssAP] {sceneName} is no longer being locked by Archipelago");
+
+                // ADDED: Immediately refresh portals in the current scene so the
+                // player doesn't have to leave and come back to use them
+                RefreshPortalsInCurrentScene();
             }
         }
 
