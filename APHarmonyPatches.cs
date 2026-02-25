@@ -218,8 +218,8 @@ namespace AtlyssArchipelagoWIP
     }
 
     // UPDATED: Patch GameManager.Locate_Item with HYBRID ICON SYSTEM
-    // - Items from ATLYSS game → Show real item's icon (Regen Vial, Iron Sword, etc.)
-    // - Items from other Archipelago games → Show custom Archipelago icon (loaded from embedded resource)
+    // - Items from ATLYSS game -> Show real item's icon (Regen Vial, Iron Sword, etc.)
+    // - Items from other Archipelago games -> Show custom Archipelago icon (loaded from embedded resource)
     // This gives visual clarity for ATLYSS items while showing a unified icon for other games
     // FIXED: Changed parameter name from "_itemName" to "_tag" to match actual GameManager.Locate_Item signature
     // FIXED: Use existing item as dummy instead of trying to create abstract class instance (ScriptableItem is abstract)
@@ -732,12 +732,46 @@ namespace AtlyssArchipelagoWIP
         }
     }
 
-    
+    // NEW: Angela "Rude!" achievement trigger patch
+    // Detects when the player enters Angela's butt hitbox (tag ATLYSS_ACHIEVEMENT_10)
+    // and sends the "Irritate Angela" AP location check (ID 591500).
+    // Patches OnTriggerEnter directly so it fires regardless of Steam achievement status.
+    // SendCheckById already prevents duplicate sends via _reportedChecks HashSet.
+    [HarmonyPatch(typeof(SteamAchievementTrigger), "OnTriggerEnter")]
+    public static class AngelaRudePatch
+    {
+        private static readonly FieldInfo _triggerTagField = AccessTools.Field(typeof(SteamAchievementTrigger), "_triggerTag");
+
+        static void Postfix(SteamAchievementTrigger __instance)
+        {
+            try
+            {
+                if (AtlyssArchipelagoPlugin.Instance == null || !AtlyssArchipelagoPlugin.Instance.connected)
+                    return;
+
+                string tag = (string)_triggerTagField.GetValue(__instance);
+                if (tag != "ATLYSS_ACHIEVEMENT_10")
+                    return;
+
+                AtlyssArchipelagoPlugin.Instance.SendCheckById(591500);
+                AtlyssArchipelagoPlugin.Instance.SendAPChatMessage(
+                    "Found <color=yellow>Irritate Angela</color>! Sent item to another player!"
+                );
+                StaticLogger?.LogInfo("[AtlyssAP] Angela 'Rude!' location check sent!");
+            }
+            catch (Exception ex)
+            {
+                StaticLogger?.LogError($"[AtlyssAP] Angela patch error: {ex.Message}");
+            }
+        }
+    }
+
+
     // SPIKE STORAGE PATCHES
     // Redirects the game's file I/O for item banks to AP-specific bank files.
     // UPDATED: Now checks IsAPSessionActive() in addition to connected, so
     // storage persists across game restarts without needing to reconnect first.
-    
+
 
     public class SpikePatch
     {

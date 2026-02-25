@@ -141,6 +141,9 @@ namespace AtlyssArchipelagoWIP
         private const long DEFEAT_VALDUR = BASE_LOCATION_ID + 6;
         private const long REACH_LEVEL_2 = BASE_LOCATION_ID + 10;
 
+        // Angela "Rude!" achievement trigger - hitting Angela's butt hitbox in Sanctum
+        private const long IRRITATE_ANGELA = BASE_LOCATION_ID + 500;
+
         // CORRECTED: Fixed multiple quest name typos to match locations.py exactly
         // Changes made:
         // - "The Colosseum" → "The Colossus"
@@ -266,6 +269,8 @@ namespace AtlyssArchipelagoWIP
             { 591001, "Defeat Slime Diva" },
             { 591002, "Defeat Lord Zuulneruda" },
             { 591003, "Defeat Galius" },
+
+            { 591500, "Irritate Angela" },
         };
 
         // NEW: Fishing level locations (591400-591408) - Added for fishing progression tracking
@@ -1307,7 +1312,8 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        private void SendCheckById(long locationId)
+        // Changed from private to public so HarmonyPatches can send checks (e.g. Angela trigger)
+        public void SendCheckById(long locationId)
         {
             if (!connected || _session == null)
             {
