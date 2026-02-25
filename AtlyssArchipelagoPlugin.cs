@@ -1079,6 +1079,16 @@ namespace AtlyssArchipelagoWIP
             connecting = true;
             try
             {
+                // FIX #3: Guard against null InputFields during early scene loading.
+                // When auto-connect fires before the settings menu has been created,
+                // apServer/apSlot are still null, causing NullReferenceException.
+                if (apServer == null || apSlot == null)
+                {
+                    Logger.LogWarning("[AtlyssAP] UI not ready yet (InputFields are null). Retrying later...");
+                    connecting = false;
+                    return;
+                }
+
                 Logger.LogInfo("[AtlyssAP] === CONNECTING TO ARCHIPELAGO ===");
                 Logger.LogInfo($"[AtlyssAP] Server: {apServer.text}");
                 Logger.LogInfo($"[AtlyssAP] Slot: {apSlot.text}");
@@ -1402,6 +1412,8 @@ namespace AtlyssArchipelagoWIP
                         {
                             string sceneName = _portalScenes[portalName];
                             portalLocker.UnblockAccessToScene(sceneName);
+                            // FIX #4: Null-guard the chat send for portal unlocks.
+                            // Player/chat may not be ready when portals unlock during early item receive.
                             SendAPChatMessage($"<color=#00FFFF>{portalName.Replace(" Portal", "")} unlocked!</color>");
                         }
                     }
@@ -1428,6 +1440,7 @@ namespace AtlyssArchipelagoWIP
                     {
                         string sceneName = _portalScenes[itemName];
                         portalLocker.UnblockAccessToScene(sceneName);
+                        // FIX #4: Same null-guard concern as progressive portals above
                         SendAPChatMessage($"<color=#00FFFF>{itemName.Replace(" Portal", "")} unlocked!</color>");
                     }
                     return;
@@ -1640,8 +1653,11 @@ namespace AtlyssArchipelagoWIP
                 Player localPlayer = Player._mainPlayer;
                 if (localPlayer == null) return;
                 ChatBehaviour chat = localPlayer._chatBehaviour;
-                maxOnscreenMessages.SetValue(chat, 50);
+                // FIX #4: Check chat is not null BEFORE calling SetValue on it.
+                // Previously maxOnscreenMessages.SetValue(chat, 50) ran before the null check,
+                // causing NullReferenceException when chat wasn't ready during early item receives.
                 if (chat == null) return;
+                maxOnscreenMessages.SetValue(chat, 50);
 
                 chat.Init_GameLogicMessage(
                     $"<color=#00ff00>[Archipelago]</color> {message}"
