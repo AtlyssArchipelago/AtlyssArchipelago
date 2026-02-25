@@ -20,18 +20,26 @@ namespace AtlyssArchipelagoWIP
         // Total capacity: 40 (master) + 7*40 (numbered) = 320 slots
         // More than enough for AP items
 
+        // FIX #1: Tracks items already logged as dropped so we don't spam
+        // "Bank full, cannot reassign" 12,000+ times for the same items.
+        // Key = item name, logged once per session. Cleared on ClearAPSession/ClearAllAPBanks.
+        private static HashSet<string> _droppedItemsLogged = new HashSet<string>();
+
+        // FIX #1: Tracks which banks have already been validated this session.
+        // Prevents re-running the fixup pass on every single Load call.
+        // Key = bank file path. Cleared on ClearAPSession/ClearAllAPBanks.
+        private static HashSet<string> _validatedBanks = new HashSet<string>();
+
         [Serializable]
         public class ItemBankData
         {
             public List<ItemData> _heldItemStorage = new List<ItemData>();
         }
 
-        // ================================================================
         // SESSION PERSISTENCE
         // A marker file that tracks whether an AP session is active.
         // This allows the file redirect patches to work BEFORE reconnecting
         // so items persist across game restarts.
-        // ================================================================
 
         private static string GetSessionMarkerPath()
         {
@@ -39,18 +47,14 @@ namespace AtlyssArchipelagoWIP
             return Path.Combine(gameDataPath, "ap_session_active");
         }
 
-        /// <summary>
-        /// Returns true if an AP session was previously active (marker file exists).
-        /// Used by file redirect patches to load AP banks even before reconnecting.
-        /// </summary>
+        // Returns true if an AP session was previously active (marker file exists).
+        // Used by file redirect patches to load AP banks even before reconnecting.
         public static bool IsAPSessionActive()
         {
             return File.Exists(GetSessionMarkerPath());
         }
 
-        /// <summary>
-        /// Called when connecting to AP server. Creates the marker file.
-        /// </summary>
+        // Called when connecting to AP server. Creates the marker file.
         public static void SetAPSessionActive()
         {
             try
@@ -68,9 +72,7 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        /// <summary>
-        /// Called when starting a NEW AP game/seed. Removes the marker and clears banks.
-        /// </summary>
+        // Called when starting a NEW AP game/seed. Removes the marker and clears banks.
         public static void ClearAPSession()
         {
             try
@@ -79,6 +81,9 @@ namespace AtlyssArchipelagoWIP
                 if (File.Exists(path))
                     File.Delete(path);
                 ClearAllAPBanks();
+                // FIX #1: Reset validation caches for new session
+                _droppedItemsLogged.Clear();
+                _validatedBanks.Clear();
                 AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] AP session cleared (marker removed, banks wiped)");
             }
             catch (Exception ex)
@@ -87,9 +92,7 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // ================================================================
         // BANK PATHS
-        // ================================================================
 
         public static string GetAPMasterBankPath()
         {
@@ -108,9 +111,7 @@ namespace AtlyssArchipelagoWIP
             return Path.Combine(gameDataPath, $"atl_itemBank_ap_{bankNumber:D2}");
         }
 
-        // ================================================================
         // BANK INITIALIZATION
-        // ================================================================
 
         public static void InitializeAPBanks()
         {
@@ -155,16 +156,12 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // ================================================================
         // BANK VALIDATION
         // Fixes items with overlapping or out-of-bounds slot numbers.
-        // Called every time a bank is loaded to prevent IndexOutOfRangeException.
-        // ================================================================
+        // Called once per session per bank to prevent IndexOutOfRangeException.
 
-        /// <summary>
-        /// Validate and fix slot numbers in a bank. Reassigns any slots that are
-        /// out-of-bounds or overlapping. Returns true if any fixes were made.
-        /// </summary>
+        // Validate and fix slot numbers in a bank. Reassigns any slots that are
+        // out-of-bounds or overlapping. Returns true if any fixes were made.
         private static bool ValidateBank(ItemBankData bank, int maxSlots)
         {
             if (bank == null || bank._heldItemStorage == null || bank._heldItemStorage.Count == 0)
@@ -203,30 +200,46 @@ namespace AtlyssArchipelagoWIP
                             $"[AtlyssAP] Fixing item '{item._itemName}' slot {item._slotNumber} -> {newSlot} (was out-of-bounds or overlapping)"
                         );
                         item._slotNumber = newSlot;
+                        usedSlots.Add(newSlot);
                         modified = true;
                     }
                     else
                     {
-                        // Bank is full — this item can't fit. Remove it.
-                        // (This shouldn't happen normally since we cap items per bank)
-                        AtlyssArchipelagoPlugin.StaticLogger?.LogWarning(
-                            $"[AtlyssAP] Bank full, cannot reassign item '{item._itemName}' — will be dropped"
-                        );
+                        // FIX #1: Mark as -1 so RemoveAll actually catches it.
+                        // Previously the slot stayed at its original value (>= 0 and < maxSlots)
+                        // so RemoveAll never removed it, and it would fail again on every future load.
+                        item._slotNumber = -1;
+                        modified = true;
+
+                        // FIX #1: Only log once per item name per session to prevent 12,000+ spam lines.
+                        if (!_droppedItemsLogged.Contains(item._itemName))
+                        {
+                            _droppedItemsLogged.Add(item._itemName);
+                            AtlyssArchipelagoPlugin.StaticLogger?.LogWarning(
+                                $"[AtlyssAP] Bank full, dropping item '{item._itemName}' (further drops of this item will be silent)"
+                            );
+                        }
                     }
                 }
-
-                usedSlots.Add(item._slotNumber);
+                else
+                {
+                    usedSlots.Add(item._slotNumber);
+                }
             }
 
-            // Remove items that couldn't be assigned valid slots
-            bank._heldItemStorage.RemoveAll(item => item._slotNumber < 0 || item._slotNumber >= maxSlots);
+            // Remove items that couldn't be assigned valid slots (now reliably caught via -1)
+            int removed = bank._heldItemStorage.RemoveAll(item => item._slotNumber < 0 || item._slotNumber >= maxSlots);
+            if (removed > 0)
+            {
+                AtlyssArchipelagoPlugin.StaticLogger?.LogInfo(
+                    $"[AtlyssAP] Removed {removed} overflow item(s) from bank"
+                );
+            }
 
             return modified;
         }
 
-        // ================================================================
         // BANK LOAD / SAVE
-        // ================================================================
 
         public static ItemBankData LoadAPBank(int bankNumber)
         {
@@ -243,11 +256,17 @@ namespace AtlyssArchipelagoWIP
                 ItemBankData bank = JsonConvert.DeserializeObject<ItemBankData>(json);
                 bank = bank ?? new ItemBankData();
 
-                // Validate on load — fix any bad slot numbers
-                if (ValidateBank(bank, NUMBERED_BANK_SLOTS))
+                // FIX #1: Only validate once per session per bank.
+                // Previously this ran on EVERY load (up to 8x per item received),
+                // causing the same items to fail and log thousands of times.
+                if (!_validatedBanks.Contains(path))
                 {
-                    SaveAPBank(bankNumber, bank);
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] Fixed slot numbers in AP bank {bankNumber}");
+                    if (ValidateBank(bank, NUMBERED_BANK_SLOTS))
+                    {
+                        SaveAPBank(bankNumber, bank);
+                        AtlyssArchipelagoPlugin.StaticLogger?.LogInfo($"[AtlyssAP] Fixed slot numbers in AP bank {bankNumber}");
+                    }
+                    _validatedBanks.Add(path);
                 }
 
                 return bank;
@@ -288,11 +307,15 @@ namespace AtlyssArchipelagoWIP
                 ItemBankData bank = JsonConvert.DeserializeObject<ItemBankData>(json);
                 bank = bank ?? new ItemBankData();
 
-                // Validate on load — fix any bad slot numbers
-                if (ValidateBank(bank, MASTER_BANK_SLOTS))
+                // FIX #1: Only validate once per session per bank.
+                if (!_validatedBanks.Contains(path))
                 {
-                    SaveAPMasterBank(bank);
-                    AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Fixed slot numbers in AP master bank");
+                    if (ValidateBank(bank, MASTER_BANK_SLOTS))
+                    {
+                        SaveAPMasterBank(bank);
+                        AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Fixed slot numbers in AP master bank");
+                    }
+                    _validatedBanks.Add(path);
                 }
 
                 return bank;
@@ -318,9 +341,7 @@ namespace AtlyssArchipelagoWIP
             }
         }
 
-        // ================================================================
         // ADD ITEM TO STORAGE
-        // ================================================================
 
         public static bool AddItemToAPSpike(ItemData itemToAdd)
         {
@@ -455,9 +476,7 @@ namespace AtlyssArchipelagoWIP
             return nextSlot < maxSlots ? nextSlot : -1;
         }
 
-        // ================================================================
         // UTILITY
-        // ================================================================
 
         public static int GetTotalItemCount()
         {
@@ -501,6 +520,10 @@ namespace AtlyssArchipelagoWIP
                 {
                     SaveAPBank(i, emptyBank);
                 }
+
+                // FIX #1: Reset validation caches when banks are wiped
+                _droppedItemsLogged.Clear();
+                _validatedBanks.Clear();
 
                 AtlyssArchipelagoPlugin.StaticLogger?.LogInfo("[AtlyssAP] Cleared all AP item banks (master + numbered)");
             }
