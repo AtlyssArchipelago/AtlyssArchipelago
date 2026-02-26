@@ -162,6 +162,10 @@ namespace AtlyssArchipelagoWIP
     {
         static void Postfix(Player __instance)
         {
+            // Only trigger for the local player, not other players on the server
+            if (__instance != Player._mainPlayer)
+                return;
+
             AtlyssArchipelagoPlugin basePlugin = AtlyssArchipelagoPlugin.Instance;
             if (basePlugin._dlService == null || !basePlugin.cfgDeathlink.Value)
             {
@@ -732,32 +736,41 @@ namespace AtlyssArchipelagoWIP
         }
     }
 
-    // NEW: Angela "Rude!" achievement trigger patch
-    // Detects when the player enters Angela's butt hitbox (tag ATLYSS_ACHIEVEMENT_10)
-    // and sends the "Irritate Angela" AP location check (ID 591500).
-    // Patches OnTriggerEnter directly so it fires regardless of Steam achievement status.
-    // SendCheckById already prevents duplicate sends via _reportedChecks HashSet.
-    [HarmonyPatch(typeof(SteamAchievementTrigger), "OnTriggerEnter")]
+    // Angela "Rude!" achievement trigger patch
+    // The actual mechanism: Angela bends over at bookshelf (misc01 anim), enabling
+    // _specialHitbox which has a FriendlyNPC_Hitbox component. When the player's
+    // weapon collider enters it, FriendlyNPC_Hitbox.OnTriggerEnter fires.
+    // The _achievementTag on Angela's hitbox is "ATLYSS_ACHIEVEMENT_11".
+    // We hook this to send the AP location check (ID 591500).
+    [HarmonyPatch(typeof(FriendlyNPC_Hitbox), "OnTriggerEnter")]
     public static class AngelaRudePatch
     {
-        private static readonly FieldInfo _triggerTagField = AccessTools.Field(typeof(SteamAchievementTrigger), "_triggerTag");
-
-        static void Postfix(SteamAchievementTrigger __instance)
+        static void Postfix(FriendlyNPC_Hitbox __instance, Collider __0)
         {
             try
             {
                 if (AtlyssArchipelagoPlugin.Instance == null || !AtlyssArchipelagoPlugin.Instance.connected)
                     return;
 
-                string tag = (string)_triggerTagField.GetValue(__instance);
-                if (tag != "ATLYSS_ACHIEVEMENT_10")
+                // Only trigger for the local player, not other players on the server
+                if (Player._mainPlayer == null)
+                    return;
+                if (__0.GetComponentInParent<Player>() != Player._mainPlayer)
                     return;
 
+                var tagField = AccessTools.Field(typeof(FriendlyNPC_Hitbox), "_achievementTag");
+                if (tagField == null)
+                    return;
+
+                string tag = (string)tagField.GetValue(__instance);
+                if (tag != "ATLYSS_ACHIEVEMENT_11")
+                    return;
+
+                StaticLogger?.LogInfo("[AtlyssAP] Angela 'Rude!' hitbox triggered!");
                 AtlyssArchipelagoPlugin.Instance.SendCheckById(591500);
                 AtlyssArchipelagoPlugin.Instance.SendAPChatMessage(
-                    "Found <color=yellow>Irritate Angela</color>! Sent item to another player!"
+                    "Found <color=yellow>Irritate Angela</color>!"
                 );
-                StaticLogger?.LogInfo("[AtlyssAP] Angela 'Rude!' location check sent!");
             }
             catch (Exception ex)
             {
