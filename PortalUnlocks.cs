@@ -19,6 +19,10 @@ namespace AtlyssArchipelagoWIP
 
         private List<string> lockedScenes = new List<string>();
 
+        // Portal refresh must happen on Unity's main thread. When UnblockAccessToScene
+        // is called from the AP network thread, it sets this flag. Update() picks it up.
+        private bool _pendingPortalRefresh = false;
+
         // ADDED: Reverse lookup — maps locked portal data back to original data.
         // Built once in Awake() from PortalDataToLockedData so we can restore
         // portals in real-time when they get unlocked without a scene reload.
@@ -401,6 +405,18 @@ namespace AtlyssArchipelagoWIP
             StartCoroutine(EnforcePortalLocks(s));
         }
 
+        // Processes deferred portal refreshes on the main thread.
+        // UnblockAccessToScene sets the flag from the AP network thread,
+        // and this picks it up safely where Unity API calls are allowed.
+        private void Update()
+        {
+            if (_pendingPortalRefresh)
+            {
+                _pendingPortalRefresh = false;
+                RefreshPortalsInCurrentScene();
+            }
+        }
+
         private IEnumerator EnforcePortalLocks(Scene newScene)
         {
             if (!basePlugin.connected || newScene.name == "map_dungeon00_sanctumCatacombs" || newScene.name == "map_dungeon01_crescentGrove")
@@ -546,7 +562,9 @@ namespace AtlyssArchipelagoWIP
         }
 
         // UPDATED: Now calls RefreshPortalsInCurrentScene after unlocking so
-        // portals update in real-time without needing the player to leave and reload
+        // portals update in real-time without needing the player to leave and reload.
+        // FIXED: The refresh is deferred to Update() because this method is called
+        // from the AP network thread, and Unity objects can only be accessed on the main thread.
         public void UnblockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
         {
             if (lockedScenes.Contains(sceneName))
@@ -554,9 +572,8 @@ namespace AtlyssArchipelagoWIP
                 lockedScenes.Remove(sceneName);
                 StaticLogger.LogInfo($"[AtlyssAP] {sceneName} is no longer being locked by Archipelago");
 
-                // ADDED: Immediately refresh portals in the current scene so the
-                // player doesn't have to leave and come back to use them
-                RefreshPortalsInCurrentScene();
+                // Queue a refresh for the main thread instead of calling directly
+                _pendingPortalRefresh = true;
             }
         }
 

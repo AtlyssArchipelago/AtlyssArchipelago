@@ -11,6 +11,7 @@ using System;
 using System.IO;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
@@ -64,6 +65,11 @@ namespace AtlyssArchipelagoWIP
 
         // Progressive item counters (incremented each time a progressive item is received)
         private int progressivePortalCount = 0;
+
+        // Items received from AP are queued here from the network thread
+        // and processed on Unity's main thread in Update() to avoid threading issues
+        private ConcurrentQueue<(string itemName, string fromPlayer)> _receivedItemQueue
+            = new ConcurrentQueue<(string, string)>();
         // REMOVED: progressiveEquipmentTier counter - Progressive Equipment item no longer exists.
         // Equipment distribution is now handled by Gated/Random item_rules during Python seed generation.
         // The C# plugin just receives equipment items normally without needing to track tiers.
@@ -842,6 +848,25 @@ namespace AtlyssArchipelagoWIP
 
             if (connected)
             {
+                // Process any items received from the AP network thread
+                // This runs on Unity's main thread so portal unlocks and inventory
+                // operations work correctly
+                while (_receivedItemQueue.TryDequeue(out var received))
+                {
+                    try
+                    {
+                        SendAPChatMessage(
+                            $"Received <color=yellow>{received.itemName}</color> " +
+                            $"from <color=#00FFFF>{received.fromPlayer}</color>!"
+                        );
+                        HandleReceivedItem(received.itemName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"[AtlyssAP] Error processing item {received.itemName}: {ex.Message}");
+                    }
+                }
+
                 PollForLevelChanges();
                 PollForQuestCompletions();
                 // NEW: Poll for fishing and mining level changes
@@ -1302,6 +1327,9 @@ namespace AtlyssArchipelagoWIP
                 // REMOVED: progressiveEquipmentTier reset - Progressive Equipment no longer exists.
                 // Equipment is now distributed via Gated/Random item_rules during Python seed generation.
 
+                // Clear any pending items from the network thread queue
+                while (_receivedItemQueue.TryDequeue(out _)) { }
+
                 // NEW: Reset shop sanity state
                 _shopSanity.Reset();
 
@@ -1383,13 +1411,11 @@ namespace AtlyssArchipelagoWIP
                 ItemInfo item = helper.DequeueItem();
                 string itemName = helper.GetItemName(item.ItemId, item.ItemGame) ?? $"Item {item.ItemId}";
                 string fromPlayerName = _session.Players.GetPlayerName(item.Player) ?? $"Player {item.Player}";
-                Logger.LogInfo($"[AtlyssAP] Received: {itemName} from {fromPlayerName}");
+                Logger.LogInfo($"[AtlyssAP] Queued received item: {itemName} from {fromPlayerName}");
 
-                SendAPChatMessage(
-                    $"Received <color=yellow>{itemName}</color> " +
-                    $"from <color=#00FFFF>{fromPlayerName}</color>!"
-                );
-                HandleReceivedItem(itemName);
+                // Queue for main thread processing - AP callbacks fire on the network thread,
+                // but Unity objects and lockedScenes must only be touched on the main thread
+                _receivedItemQueue.Enqueue((itemName, fromPlayerName));
             }
             catch (Exception ex)
             {
