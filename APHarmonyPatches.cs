@@ -769,7 +769,7 @@ namespace AtlyssArchipelagoWIP
                 StaticLogger?.LogInfo("[AtlyssAP] Angela 'Rude!' hitbox triggered!");
                 AtlyssArchipelagoPlugin.Instance.SendCheckById(591500);
                 AtlyssArchipelagoPlugin.Instance.SendAPChatMessage(
-                    "Found <color=yellow>Irritate Angela</color>!"
+                    "Found <color=yellow>Smack Dat Azz</color>!"
                 );
             }
             catch (Exception ex)

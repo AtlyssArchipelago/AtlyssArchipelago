@@ -273,7 +273,7 @@ namespace AtlyssArchipelagoWIP
             { 591002, "Defeat Lord Zuulneruda" },
             { 591003, "Defeat Galius" },
 
-            { 591500, "Irritate Angela" },
+            { 591500, "Smack Dat Azz" },
         };
 
         // NEW: Fishing level locations (591400-591408) - Added for fishing progression tracking
