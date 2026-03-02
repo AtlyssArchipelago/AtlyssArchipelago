@@ -318,6 +318,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="APHarmonyPatches.cs" />
+    <Compile Include="ChatandCommands.cs" />
+    <Compile Include="Locationdetection.cs" />
+    <Compile Include="Itemhandler.cs" />
+    <Compile Include="Connectionmanager.cs" />
+    <Compile Include="Datatables.cs" />
     <Compile Include="ShopSanity.cs" />
     <Compile Include="SpikeStorage.cs" />
     <Compile Include="AtlyssArchipelagoPlugin.cs" />
