@@ -317,16 +317,20 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="APHarmonyPatches.cs" />
-    <Compile Include="ChatandCommands.cs" />
-    <Compile Include="Locationdetection.cs" />
-    <Compile Include="Itemhandler.cs" />
-    <Compile Include="Connectionmanager.cs" />
-    <Compile Include="Datatables.cs" />
-    <Compile Include="ShopSanity.cs" />
-    <Compile Include="SpikeStorage.cs" />
-    <Compile Include="AtlyssArchipelagoPlugin.cs" />
-    <Compile Include="PortalUnlocks.cs" />
+    <Compile Include="APHarmonyPatches\APHarmonyPatches.cs" />
+    <Compile Include="APHarmonyPatches\Itemiconpatch.cs" />
+    <Compile Include="APHarmonyPatches\SettingsMenuPatches.cs" />
+    <Compile Include="APHarmonyPatches\ShopPatches.cs" />
+    <Compile Include="APHarmonyPatches\SpikePatches.cs" />
+    <Compile Include="AtlyssArchipelagoPlugin\ChatandCommands.cs" />
+    <Compile Include="AtlyssArchipelagoPlugin\Locationdetection.cs" />
+    <Compile Include="AtlyssArchipelagoPlugin\Itemhandler.cs" />
+    <Compile Include="AtlyssArchipelagoPlugin\Connectionmanager.cs" />
+    <Compile Include="AtlyssArchipelagoPlugin\Datatables.cs" />
+    <Compile Include="OtherPlugins\ShopSanity.cs" />
+    <Compile Include="OtherPlugins\SpikeStorage.cs" />
+    <Compile Include="AtlyssArchipelagoPlugin\AtlyssArchipelagoPlugin.cs" />
+    <Compile Include="OtherPlugins\PortalUnlocks.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\" />
