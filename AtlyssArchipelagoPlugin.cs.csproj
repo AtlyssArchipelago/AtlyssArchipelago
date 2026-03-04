@@ -39,6 +39,7 @@
     </Reference>
     <Reference Include="Archipelago.MultiClient.Net, Version=6.7.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>lib\Archipelago.MultiClient.Net.dll</HintPath>
+      <Private>false</Private> <!-- Merged into output by ILRepack -->
     </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>lib\Assembly-CSharp.dll</HintPath>
@@ -93,6 +94,7 @@
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=11.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>lib\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private> <!-- Merged into output by ILRepack -->
     </Reference>
     <Reference Include="SimpleWebTransport">
       <HintPath>lib\SimpleWebTransport.dll</HintPath>
@@ -323,8 +325,8 @@
     <Compile Include="APHarmonyPatches\ShopPatches.cs" />
     <Compile Include="APHarmonyPatches\SpikePatches.cs" />
     <Compile Include="AtlyssArchipelagoPlugin\ChatandCommands.cs" />
-    <Compile Include="AtlyssArchipelagoPlugin\Locationdetection.cs" />
-    <Compile Include="AtlyssArchipelagoPlugin\Itemhandler.cs" />
+    <Compile Include="AtlyssArchipelagoPlugin\LocationDetection.cs" />
+    <Compile Include="AtlyssArchipelagoPlugin\ItemHandler.cs" />
     <Compile Include="AtlyssArchipelagoPlugin\Connectionmanager.cs" />
     <Compile Include="AtlyssArchipelagoPlugin\Datatables.cs" />
     <Compile Include="OtherPlugins\ShopSanity.cs" />
@@ -335,9 +337,24 @@
   <ItemGroup>
     <Folder Include="Properties\" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
   <!-- NEW: Embedded Archipelago icon - will be included in the DLL -->
   <ItemGroup>
     <EmbeddedResource Include="Archipelago.png-256x256_q95.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- ILRepack: Merges dependency DLLs into a single output so users only need one file -->
+  <Import Project="packages\ILRepack.Lib.MSBuild.Task.2.0.34\build\ILRepack.Lib.MSBuild.Task.targets" Condition="Exists('packages\ILRepack.Lib.MSBuild.Task.2.0.34\build\ILRepack.Lib.MSBuild.Task.targets')" />
+  <Target Name="ILRepakMerge" AfterTargets="Build">
+    <!-- Merge Archipelago.MultiClient.Net and Newtonsoft.Json into output DLL -->
+    <!-- Game/BepInEx/Unity DLLs are NOT merged since they already exist at runtime -->
+    <ILRepack
+      OutputFile="$(TargetPath)"
+      InputAssemblies="$(TargetPath);$(ProjectDir)lib\Archipelago.MultiClient.Net.dll;$(ProjectDir)lib\Newtonsoft.Json.dll"
+      LibraryPath="$(ProjectDir)lib"
+      Parallel="true"
+    />
+  </Target>
 </Project>

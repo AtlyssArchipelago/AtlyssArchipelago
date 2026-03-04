@@ -56,15 +56,14 @@ namespace AtlyssArchipelagoWIP
                     return;
                 }
 
-                // REMOVED: Entire "Progressive Equipment" handling block.
-                // Progressive Equipment item no longer exists in the item pool.
-                // Equipment distribution is now controlled by the Gated/Random option in Python:
-                //   - Gated mode: item_rules restrict equipment tiers to appropriate-level locations during seed generation
-                //   - Random mode: equipment can appear at any location
-                // In both modes, the C# plugin simply receives equipment items normally and stores them in Spike.
-                // The old code incremented progressiveEquipmentTier, picked random equipment based on player level,
-                // and added it to storage. This is no longer needed since actual equipment items are placed directly
-                // in the seed by the Python randomizer.
+                // Progressive equipment items (e.g. "Progressive Any Weapon", "Progressive Fighter Chest Piece")
+                // These are logical items used by AP's solver to gate locations by equipment tier.
+                // They don't correspond to actual game items, so we just acknowledge them.
+                if (itemName.StartsWith("Progressive ") && itemName != "Progressive Portal")
+                {
+                    Logger.LogInfo($"[AtlyssAP] Received progressive equipment: {itemName}");
+                    return;
+                }
 
                 // === INDIVIDUAL PORTAL ITEMS (Random Portals mode only) ===
                 if (_portalItemsReceived.ContainsKey(itemName))
@@ -246,12 +245,6 @@ namespace AtlyssArchipelagoWIP
             }
             return 10;  // All filler (consumables, trade items, fish, ores, etc.): always 10
         }
-
-        // REMOVED: GetEquipmentForLevel helper method - no longer needed.
-        // Was used by Progressive Equipment to find eligible gear based on player level.
-        // Progressive Equipment item has been removed from the pool entirely.
-        // Equipment is now placed directly in the seed by the Python randomizer using
-        // Gated (tier-restricted by location level) or Random (unrestricted) item_rules.
 
         private void GiveCurrency(int amount)
         {

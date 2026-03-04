@@ -6,179 +6,265 @@ namespace AtlyssArchipelagoWIP
     // Separated from main plugin to keep data definitions in one place.
     public partial class AtlyssArchipelagoPlugin
     {
-        private const long BASE_LOCATION_ID = 591000;
-        private const long DEFEAT_SLIME_DIVA = BASE_LOCATION_ID + 1;
-        private const long DEFEAT_LORD_ZUULNERUDA = BASE_LOCATION_ID + 2;
-        private const long DEFEAT_GALIUS = BASE_LOCATION_ID + 3;
-        private const long DEFEAT_COLOSSUS = BASE_LOCATION_ID + 4;
-        private const long DEFEAT_LORD_KALUUZ = BASE_LOCATION_ID + 5;
-        private const long DEFEAT_VALDUR = BASE_LOCATION_ID + 6;
-        private const long REACH_LEVEL_2 = BASE_LOCATION_ID + 10;
+        // All location names mapped to index-based IDs (matches partner's Python: location_dict.index(value) + 1)
+        // Order: quests (60), levels (16), merchants (60), professions (20), achievements (16) = 172 total
+        public static readonly Dictionary<string, long> AllLocationNameToId = new Dictionary<string, long>
+        {
+            // Quests (1-60)
+            { "A Warm Welcome", 1 },
+            { "Communing Catacombs", 2 },
+            { "Diva Must Die", 3 },
+            { "The Keep Within", 4 },
+            { "Tethering Grove", 5 },
+            { "The Glyphik Booklet", 6 },
+            { "Cleaning Terrace", 7 },
+            { "Ancient Beings", 8 },
+            { "Wicked Wizboars", 9 },
+            { "Spiraling In The Grove", 10 },
+            { "Hell In The Grove", 11 },
+            { "Nulversa Magica", 12 },
+            { "Finding Ammagon", 13 },
+            { "The Colossus", 14 },
+            { "Night Spirits", 15 },
+            { "Ridding Slimes", 16 },
+            { "Huntin' Hogs", 17 },
+            { "Purging the Grove", 18 },
+            { "Cleansing the Grove", 19 },
+            { "Nulversa Viscera", 20 },
+            { "Call of Fury", 21 },
+            { "Mastery of Strength", 22 },
+            { "Beckoning Foes", 23 },
+            { "Ghostly Goods", 24 },
+            { "Makin' a Mekspear", 25 },
+            { "Makin' a Wizwand", 26 },
+            { "Makin' a Vile Blade", 27 },
+            { "Makin' a Golem Chestpiece", 28 },
+            { "Makin' a Ragespear", 29 },
+            { "Makin' a Monolith Chestpiece", 30 },
+            { "Makin' a Firebreath Blade", 31 },
+            { "Makin' a Follycannon", 32 },
+            { "Summore' Spectral Powder!", 33 },
+            { "Makin' More Mekspears", 34 },
+            { "Makin' More Wizwands", 35 },
+            { "Makin' More Vile Blades", 36 },
+            { "Summore' Golem Chestpieces", 37 },
+            { "Makin' More Ragespears", 38 },
+            { "Summore' Monolith Chestpieces", 39 },
+            { "Nulversa, Greenversa!", 40 },
+            { "Summore' Firebreath Blades", 41 },
+            { "Makin' More Follycannons", 42 },
+            { "Focusin' in", 43 },
+            { "Mastery of Dexterity", 44 },
+            { "Whatta' Rush!", 45 },
+            { "The Voice of Zuulneruda", 46 },
+            { "Killing Tomb", 47 },
+            { "Purging the Undead", 48 },
+            { "Rattlecage Rage", 49 },
+            { "Consumed Madness", 50 },
+            { "Eradicating the Undead", 51 },
+            { "Reviling the Rageboars", 52 },
+            { "Gatling Galius", 53 },
+            { "Reviling more Rageboars", 54 },
+            { "Facing Foes", 55 },
+            { "The Gall of Galius", 56 },
+            { "Up and Over It", 57 },
+            { "Dense Ingots", 58 },
+            { "Amberite Ingots", 59 },
+            { "Sapphite Ingots", 60 },
 
-        // Angela "Rude!" achievement trigger - hitting Angela's butt hitbox in Sanctum
-        private const long IRRITATE_ANGELA = BASE_LOCATION_ID + 500;
+            // Levels (61-76)
+            { "Reach Level 2", 61 },
+            { "Reach Level 4", 62 },
+            { "Reach Level 6", 63 },
+            { "Reach Level 8", 64 },
+            { "Reach Level 10", 65 },
+            { "Reach Level 12", 66 },
+            { "Reach Level 14", 67 },
+            { "Reach Level 16", 68 },
+            { "Reach Level 18", 69 },
+            { "Reach Level 20", 70 },
+            { "Reach Level 22", 71 },
+            { "Reach Level 24", 72 },
+            { "Reach Level 26", 73 },
+            { "Reach Level 28", 74 },
+            { "Reach Level 30", 75 },
+            { "Reach Level 32", 76 },
 
-        // CORRECTED: Fixed multiple quest name typos to match locations.py exactly
-        // Changes made:
-        // - "The Colosseum" → "The Colossus"
-        // - "Summons'" → "Summore'" (all instances)
-        // - "Cleansing Terrace" → "Cleaning Terrace"
-        // - "Ambente Ingots" → "Amberite Ingots"
-        // - "Battlecage Rage" → "Rattlecage Rage"
-        // - "Wicked Wizbars" → "Wicked Wizboars"
-        // - "Reckoning Foes" → "Beckoning Foes"
-        // - "Makin' a Giant Chestpiece" → "Makin' a Golem Chestpiece"
-        // - "Canmore'" → "Summore'" (all instances)
-        // - "Finding Armagorn" → "Finding Ammagon"
-        // - "Reviling_the_Rageboars" → "Reviling the Rageboars" (removed underscore)
-        // - "Reviling the Ragebears" → "Reviling More Rageboars"
-        // - "Purging the Grave" → "Purging the Grove"
-        // - "Summon'" → "Summore'" (all instances)
-        // - ADDED "Spiraling In The Grove" (was missing)
-        // - Renumbered IDs after 201 to accommodate missing quest
+            // Merchants (77-136)
+            { "Buy Item #1 from Sally's Nook", 77 },
+            { "Buy Item #2 from Sally's Nook", 78 },
+            { "Buy Item #3 from Sally's Nook", 79 },
+            { "Buy Item #4 from Sally's Nook", 80 },
+            { "Buy Item #5 from Sally's Nook", 81 },
+            { "Buy Item #1 from Skrit's Sikrit Market", 82 },
+            { "Buy Item #2 from Skrit's Sikrit Market", 83 },
+            { "Buy Item #3 from Skrit's Sikrit Market", 84 },
+            { "Buy Item #4 from Skrit's Sikrit Market", 85 },
+            { "Buy Item #5 from Skrit's Sikrit Market", 86 },
+            { "Buy Item #1 from Frankie's Goods", 87 },
+            { "Buy Item #2 from Frankie's Goods", 88 },
+            { "Buy Item #3 from Frankie's Goods", 89 },
+            { "Buy Item #4 from Frankie's Goods", 90 },
+            { "Buy Item #5 from Frankie's Goods", 91 },
+            { "Buy Item #1 from Craig's Bazzar", 92 },
+            { "Buy Item #2 from Craig's Bazzar", 93 },
+            { "Buy Item #3 from Craig's Bazzar", 94 },
+            { "Buy Item #4 from Craig's Bazzar", 95 },
+            { "Buy Item #5 from Craig's Bazzar", 96 },
+            { "Buy Item #1 from Dye Merchant", 97 },
+            { "Buy Item #2 from Dye Merchant", 98 },
+            { "Buy Item #3 from Dye Merchant", 99 },
+            { "Buy Item #4 from Dye Merchant", 100 },
+            { "Buy Item #5 from Dye Merchant", 101 },
+            { "Buy Item #1 from Tesh's Wares", 102 },
+            { "Buy Item #2 from Tesh's Wares", 103 },
+            { "Buy Item #3 from Tesh's Wares", 104 },
+            { "Buy Item #4 from Tesh's Wares", 105 },
+            { "Buy Item #5 from Tesh's Wares", 106 },
+            { "Buy Item #1 from Nesh's Wares", 107 },
+            { "Buy Item #2 from Nesh's Wares", 108 },
+            { "Buy Item #3 from Nesh's Wares", 109 },
+            { "Buy Item #4 from Nesh's Wares", 110 },
+            { "Buy Item #5 from Nesh's Wares", 111 },
+            { "Buy Item #1 from Rikko's Treasures", 112 },
+            { "Buy Item #2 from Rikko's Treasures", 113 },
+            { "Buy Item #3 from Rikko's Treasures", 114 },
+            { "Buy Item #4 from Rikko's Treasures", 115 },
+            { "Buy Item #5 from Rikko's Treasures", 116 },
+            { "Buy Item #1 from Cotoo's Treasures", 117 },
+            { "Buy Item #2 from Cotoo's Treasures", 118 },
+            { "Buy Item #3 from Cotoo's Treasures", 119 },
+            { "Buy Item #4 from Cotoo's Treasures", 120 },
+            { "Buy Item #5 from Cotoo's Treasures", 121 },
+            { "Buy Item #1 from Ruka's Furnace", 122 },
+            { "Buy Item #2 from Ruka's Furnace", 123 },
+            { "Buy Item #3 from Ruka's Furnace", 124 },
+            { "Buy Item #4 from Ruka's Furnace", 125 },
+            { "Buy Item #5 from Ruka's Furnace", 126 },
+            { "Buy Item #1 from Torta's Fishing Shack", 127 },
+            { "Buy Item #2 from Torta's Fishing Shack", 128 },
+            { "Buy Item #3 from Torta's Fishing Shack", 129 },
+            { "Buy Item #4 from Torta's Fishing Shack", 130 },
+            { "Buy Item #5 from Torta's Fishing Shack", 131 },
+            { "Buy Item #1 from Mad Statue's Gift", 132 },
+            { "Buy Item #2 from Mad Statue's Gift", 133 },
+            { "Buy Item #3 from Mad Statue's Gift", 134 },
+            { "Buy Item #4 from Mad Statue's Gift", 135 },
+            { "Buy Item #5 from Mad Statue's Gift", 136 },
+
+            // Professions (137-156)
+            { "Fishing Lv. 1", 137 },
+            { "Fishing Lv. 2", 138 },
+            { "Fishing Lv. 3", 139 },
+            { "Fishing Lv. 4", 140 },
+            { "Fishing Lv. 5", 141 },
+            { "Fishing Lv. 6", 142 },
+            { "Fishing Lv. 7", 143 },
+            { "Fishing Lv. 8", 144 },
+            { "Fishing Lv. 9", 145 },
+            { "Fishing Lv. 10", 146 },
+            { "Mining Lv. 1", 147 },
+            { "Mining Lv. 2", 148 },
+            { "Mining Lv. 3", 149 },
+            { "Mining Lv. 4", 150 },
+            { "Mining Lv. 5", 151 },
+            { "Mining Lv. 6", 152 },
+            { "Mining Lv. 7", 153 },
+            { "Mining Lv. 8", 154 },
+            { "Mining Lv. 9", 155 },
+            { "Mining Lv. 10", 156 },
+
+            // Achievements (157-172)
+            { "A New Journey", 157 },
+            { "Clearing Catacombs (1-6)", 158 },
+            { "Clearing Catacombs (6-12)", 159 },
+            { "Becoming a Fighter", 160 },
+            { "Becoming a Mystic", 161 },
+            { "Becoming a Bandit", 162 },
+            { "Clearing Catacombs (12-18)", 163 },
+            { "Clearing Grove (15-20)", 164 },
+            { "Clearing Grove (20-25)", 165 },
+            { "Judgement", 166 },
+            { "Corrupted Arcana", 167 },
+            { "Holier than Thou", 168 },
+            { "Altered Vision", 169 },
+            { "Scaling the Tower", 170 },
+            { "Scaling Stars", 171 },
+            { "Rude!", 172 },
+        };
+
+        // Quest names mapped to location IDs for polling (subset of AllLocationNameToId)
         private static readonly Dictionary<string, long> AllQuestToLocation = new Dictionary<string, long>
         {
-            { "Diva Must Die", DEFEAT_SLIME_DIVA },
-            { "The Voice of Zuulneruda", DEFEAT_LORD_ZUULNERUDA },
-            { "Gatling Galius", DEFEAT_GALIUS },
-            { "The Colossus", DEFEAT_COLOSSUS },  // FIXED: was "The Colosseum"
-
-            { "A Warm Welcome", BASE_LOCATION_ID + 30 },
-            { "Communing Catacombs", BASE_LOCATION_ID + 31 },
-
-            { "Dense Ingots", BASE_LOCATION_ID + 100 },
-            { "Ghostly Goods", BASE_LOCATION_ID + 101 },
-            { "Killing Tomb", BASE_LOCATION_ID + 102 },
-            { "Night Spirits", BASE_LOCATION_ID + 103 },
-            { "Ridding Slimes", BASE_LOCATION_ID + 104 },
-            { "Summore' Spectral Powder!", BASE_LOCATION_ID + 105 },  // FIXED: was "Summons'"
-
-            { "Call of Fury", BASE_LOCATION_ID + 110 },
-            { "Cold Shoulder", BASE_LOCATION_ID + 111 },
-            { "Focusin' in", BASE_LOCATION_ID + 112 },
-
-            { "Cleaning Terrace", BASE_LOCATION_ID + 115 },  // FIXED: was "Cleansing Terrace"
-            { "Huntin' Hogs", BASE_LOCATION_ID + 116 },
-
-            { "Amberite Ingots", BASE_LOCATION_ID + 120 },  // FIXED: was "Ambente Ingots"
-            { "Makin' a Mekspear", BASE_LOCATION_ID + 121 },
-            { "Makin' More Mekspears", BASE_LOCATION_ID + 122 },
-            { "Purging the Undead", BASE_LOCATION_ID + 123 },
-            { "Rattlecage Rage", BASE_LOCATION_ID + 124 },  // FIXED: was "Battlecage Rage"
-            { "Ancient Beings", BASE_LOCATION_ID + 125 },
-
-            { "Makin' a Vile Blade", BASE_LOCATION_ID + 130 },
-            { "Makin' a Wizwand", BASE_LOCATION_ID + 131 },
-            { "Makin' More Vile Blades", BASE_LOCATION_ID + 132 },
-            { "Makin' More Wizwands", BASE_LOCATION_ID + 133 },
-            { "Sapphite Ingots", BASE_LOCATION_ID + 134 },
-
-            { "Devious Pact", BASE_LOCATION_ID + 140 },
-            { "Disciple of Magic", BASE_LOCATION_ID + 141 },
-            { "Mastery of Dexterity", BASE_LOCATION_ID + 142 },
-            { "Mastery of Mind", BASE_LOCATION_ID + 143 },
-            { "Mastery of Strength", BASE_LOCATION_ID + 144 },
-            { "Strength and Honor", BASE_LOCATION_ID + 145 },
-            { "Wicked Wizboars", BASE_LOCATION_ID + 146 },  // FIXED: was "Wicked Wizbars"
-
-            { "Beckoning Foes", BASE_LOCATION_ID + 150 },  // FIXED: was "Reckoning Foes"
-            { "Blossom of Life", BASE_LOCATION_ID + 151 },
-            { "Consumed Madness", BASE_LOCATION_ID + 152 },
-            { "Eradicating the Undead", BASE_LOCATION_ID + 153 },
-            { "Makin' a Golem Chestpiece", BASE_LOCATION_ID + 154 },  // FIXED: was "Makin' a Giant Chestpiece"
-            { "Summore' Golem Chestpieces", BASE_LOCATION_ID + 155 },  // FIXED: was "Canmore' Golem Chestpieces"
-            { "Whatta' Rush!", BASE_LOCATION_ID + 156 },
-
-            { "Finding Ammagon", BASE_LOCATION_ID + 160 },  // FIXED: was "Finding Armagorn"
-            { "Reviling the Rageboars", BASE_LOCATION_ID + 161 },  // FIXED: was "Reviling_the_Rageboars" (removed underscore)
-            { "Reviling More Rageboars", BASE_LOCATION_ID + 162 },  // FIXED: was "Reviling the Ragebears"
-
-            { "Makin' a Ragespear", BASE_LOCATION_ID + 165 },
-            { "Makin' More Ragespears", BASE_LOCATION_ID + 166 },
-            { "Purging the Grove", BASE_LOCATION_ID + 167 },  // FIXED: was "Purging the Grave"
-            { "Searching for the Grove", BASE_LOCATION_ID + 168 },
-            { "Tethering Grove", BASE_LOCATION_ID + 169 },
-            { "Up and Over It", BASE_LOCATION_ID + 170 },
-
-            { "Makin' a Monolith Chestpiece", BASE_LOCATION_ID + 175 },
-            { "Summore' Monolith Chestpieces", BASE_LOCATION_ID + 176 },  // FIXED: was "Summons' Monolith Chestpieces"
-
-            { "Facing Foes", BASE_LOCATION_ID + 180 },
-
-            { "Cleansing the Grove", BASE_LOCATION_ID + 200 },
-            { "Spiraling In The Grove", BASE_LOCATION_ID + 201 },  // ADDED: was missing entirely
-            { "Hell In The Grove", BASE_LOCATION_ID + 202 },  // RENUMBERED: was 201
-            { "Makin' a Firebreath Blade", BASE_LOCATION_ID + 203 },  // RENUMBERED: was 202
-            { "Nulversa Magica", BASE_LOCATION_ID + 204 },  // RENUMBERED: was 203
-            { "Nulversa Viscera", BASE_LOCATION_ID + 205 },  // RENUMBERED: was 204
-            { "Nulversa, Greenveras!", BASE_LOCATION_ID + 206 },  // RENUMBERED: was 205
-            { "Summore' Firebreath Blades", BASE_LOCATION_ID + 207 },  // FIXED & RENUMBERED: was "Summon'" at 206
-
-            { "The Gall of Galius", BASE_LOCATION_ID + 220 },
-
-            { "Makin' a Follycannon", BASE_LOCATION_ID + 240 },
-            { "Makin' More Follycannons", BASE_LOCATION_ID + 241 },
-            { "The Glyphik Booklet", BASE_LOCATION_ID + 242 }
-        };
-
-        private static readonly Dictionary<long, string> LocationIdToName = new Dictionary<long, string>
-        {
-            { 591010, "Reach Level 2" },
-            { 591011, "Reach Level 4" },
-            { 591012, "Reach Level 6" },
-            { 591013, "Reach Level 8" },
-            { 591014, "Reach Level 10" },
-            { 591015, "Reach Level 12" },
-            { 591016, "Reach Level 14" },
-            { 591017, "Reach Level 16" },
-            { 591018, "Reach Level 18" },
-            { 591019, "Reach Level 20" },
-            { 591020, "Reach Level 22" },
-            { 591021, "Reach Level 24" },
-            { 591022, "Reach Level 26" },
-            { 591023, "Reach Level 28" },
-            { 591024, "Reach Level 30" },
-            { 591025, "Reach Level 32" },
-
-            { 591001, "Defeat Slime Diva" },
-            { 591002, "Defeat Lord Zuulneruda" },
-            { 591003, "Defeat Galius" },
-
-            { 591500, "Irritate Angela" },
-        };
-
-        // NEW: Fishing level locations (591400-591408) - Added for fishing progression tracking
-        private static readonly Dictionary<int, long> FishingLevelLocations = new Dictionary<int, long>
-        {
-            { 2, 591400 },
-            { 3, 591401 },
-            { 4, 591402 },
-            { 5, 591403 },
-            { 6, 591404 },
-            { 7, 591405 },
-            { 8, 591406 },
-            { 9, 591407 },
-            { 10, 591408 }
-        };
-
-        // NEW: Mining level locations (591409-591417) - Added for mining progression tracking
-        private static readonly Dictionary<int, long> MiningLevelLocations = new Dictionary<int, long>
-        {
-            { 2, 591409 },
-            { 3, 591410 },
-            { 4, 591411 },
-            { 5, 591412 },
-            { 6, 591413 },
-            { 7, 591414 },
-            { 8, 591415 },
-            { 9, 591416 },
-            { 10, 591417 }
+            { "A Warm Welcome", 1 },
+            { "Communing Catacombs", 2 },
+            { "Diva Must Die", 3 },
+            { "The Keep Within", 4 },
+            { "Tethering Grove", 5 },
+            { "The Glyphik Booklet", 6 },
+            { "Cleaning Terrace", 7 },
+            { "Ancient Beings", 8 },
+            { "Wicked Wizboars", 9 },
+            { "Spiraling In The Grove", 10 },
+            { "Hell In The Grove", 11 },
+            { "Nulversa Magica", 12 },
+            { "Finding Ammagon", 13 },
+            { "The Colossus", 14 },
+            { "Night Spirits", 15 },
+            { "Ridding Slimes", 16 },
+            { "Huntin' Hogs", 17 },
+            { "Purging the Grove", 18 },
+            { "Cleansing the Grove", 19 },
+            { "Nulversa Viscera", 20 },
+            { "Call of Fury", 21 },
+            { "Mastery of Strength", 22 },
+            { "Beckoning Foes", 23 },
+            { "Ghostly Goods", 24 },
+            { "Makin' a Mekspear", 25 },
+            { "Makin' a Wizwand", 26 },
+            { "Makin' a Vile Blade", 27 },
+            { "Makin' a Golem Chestpiece", 28 },
+            { "Makin' a Ragespear", 29 },
+            { "Makin' a Monolith Chestpiece", 30 },
+            { "Makin' a Firebreath Blade", 31 },
+            { "Makin' a Follycannon", 32 },
+            { "Summore' Spectral Powder!", 33 },
+            { "Makin' More Mekspears", 34 },
+            { "Makin' More Wizwands", 35 },
+            { "Makin' More Vile Blades", 36 },
+            { "Summore' Golem Chestpieces", 37 },
+            { "Makin' More Ragespears", 38 },
+            { "Summore' Monolith Chestpieces", 39 },
+            { "Nulversa, Greenversa!", 40 },
+            { "Summore' Firebreath Blades", 41 },
+            { "Makin' More Follycannons", 42 },
+            { "Focusin' in", 43 },
+            { "Mastery of Dexterity", 44 },
+            { "Whatta' Rush!", 45 },
+            { "The Voice of Zuulneruda", 46 },
+            { "Killing Tomb", 47 },
+            { "Purging the Undead", 48 },
+            { "Rattlecage Rage", 49 },
+            { "Consumed Madness", 50 },
+            { "Eradicating the Undead", 51 },
+            { "Reviling the Rageboars", 52 },
+            { "Gatling Galius", 53 },
+            { "Reviling more Rageboars", 54 },
+            { "Facing Foes", 55 },
+            { "The Gall of Galius", 56 },
+            { "Up and Over It", 57 },
+            { "Dense Ingots", 58 },
+            { "Amberite Ingots", 59 },
+            { "Sapphite Ingots", 60 },
         };
 
         private string GetLocationName(long locationId)
         {
-            if (LocationIdToName.TryGetValue(locationId, out string name))
-                return name;
+            foreach (var kvp in AllLocationNameToId)
+            {
+                if (kvp.Value == locationId)
+                    return kvp.Key;
+            }
             return $"Location {locationId}";
         }
 
@@ -199,7 +285,7 @@ namespace AtlyssArchipelagoWIP
             { "Magiflower Pack", "(lv-0) STATUSCONSUMABLE_Magiflower" },
             { "Magileaf Pack", "(lv-0) STATUSCONSUMABLE_Magileaf" },
 
-            { "Stamstar Pack", "(lv-0) STATUSCONSUMABLE_Stamstar" },
+            { "Stamstar", "(lv-0) STATUSCONSUMABLE_Stamstar" },
 
             { "Agility Potion Pack", "(lv-10) STATUSCONSUMABLE_Agility Potion" },
             { "Agility Vial Pack", "(lv-0) STATUSCONSUMABLE_Agility Vial" },
@@ -217,21 +303,21 @@ namespace AtlyssArchipelagoWIP
             { "Spectral Powder Pack", "(lv-0) STATUSCONSUMABLE_Spectral Powder" },
 
             // Trade Items - Badges
-            { "Geistlord Badge Pack", "TRADEITEM_Geistlord Badge" },
-            { "Coldgeist Badge Pack", "TRADEITEM_Coldgeist Badge" },
-            { "Earthcore Badge Pack", "TRADEITEM_Earthcore Badge" },
-            { "Windcore Badge Pack", "TRADEITEM_Windcore Badge" },
+            { "Geistlord Badge", "TRADEITEM_Geistlord Badge" },
+            { "Coldgeist Badge", "TRADEITEM_Coldgeist Badge" },
+            { "Earthcore Badge", "TRADEITEM_Earthcore Badge" },
+            { "Windcore Badge", "TRADEITEM_Windcore Badge" },
 
             // Trade Items - Clusters/Ingots (existing)
-            { "Iron Cluster Pack", "TRADEITEM_Iron Cluster" },
-            { "Copper Cluster Pack", "TRADEITEM_Copper Cluster" },
-            { "Mithril Cluster Pack", "TRADEITEM_Mithril Cluster" },
-            { "Dense Ingot Pack", "TRADEITEM_Dense Ingot" },
-            { "Sapphite Ingot Pack", "TRADEITEM_Sapphite Ingot" },
-            { "Amberite Ingot Pack", "TRADEITEM_Amberite Ingot" },
+            { "Iron Cluster", "TRADEITEM_Iron Cluster" },
+            { "Copper Cluster", "TRADEITEM_Copper Cluster" },
+            { "Mithril Cluster", "TRADEITEM_Mithril Cluster" },
+            { "Dense Ingot", "TRADEITEM_Dense Ingot" },
+            { "Sapphite Ingot", "TRADEITEM_Sapphite Ingot" },
+            { "Amberite Ingot", "TRADEITEM_Amberite Ingot" },
 
             { "Soul Pearl", "TRADEITEM_Soul Pearl" },
-            { "Experience Bond Pack", "TRADEITEM_Experience Bond" },
+            { "Experience Bond", "TRADEITEM_Experience Bond" },
 
             // Weapons - Melee (One-Handed Sword/Mace, Strength)
             { "Crypt Blade", "(lv-2) WEAPON_Crypt Blade (Sword, Strength)" },
@@ -289,7 +375,7 @@ namespace AtlyssArchipelagoWIP
             { "Serrated Spear", "(lv-16) WEAPON_Serrated Spear (Polearm, Strength)" },
             { "Sapphite Spear", "(lv-18) WEAPON_Sapphite Spear (Polearm, Strength)" },
             { "Nulrok Spear", "(lv-20) WEAPON_Nulrok Spear (Polearm, Strength)" },
-            { "Cryotribe Spear", "(lv-22) WEAPON_Cryotribe Spear (Polearm, Strength)" },
+            { "Cyrotribe Spear", "(lv-22) WEAPON_Cryotribe Spear (Polearm, Strength)" },
             { "Flametribe Spear", "(lv-22) WEAPON_Flametribe Spear (Polearm, Strength)" },
 
             // Weapons - Scepters (One-Handed, Mind)
@@ -317,7 +403,7 @@ namespace AtlyssArchipelagoWIP
             { "Sapphite Bell", "(lv-18) WEAPON_Sapphite Bell (Magic Bell, Mind)" },
 
             // Weapons - Katars (Two-Handed, Dexterity)
-            { "Slimecrust Katars", "(lv-2) WEAPON_Slimecrust Katars (Katars, Dexterity)" },
+            { "Sliemcrust Katars", "(lv-2) WEAPON_Slimecrust Katars (Katars, Dexterity)" },
             { "Cryptsinge Katars", "(lv-4) WEAPON_Cryptsinge Katars (Katars, Dexterity)" },
             { "Slimek Shivs", "(lv-4) WEAPON_Slimek Shivs (Katars, Dexterity)" },
             { "Deathgel Shivs", "(lv-6) WEAPON_Deathgel Shivs (Katars, Dexterity)" },
@@ -342,7 +428,7 @@ namespace AtlyssArchipelagoWIP
             { "Petrified Bow", "(lv-12) WEAPON_Petrified Bow (Bow, Dexterity)" },
             { "Mithril Bow", "(lv-14) WEAPON_Mithril Bow (Bow, Dexterity)" },
             { "Necroroyal Bow", "(lv-14) WEAPON_Necroroyal Bow (Bow, Dexterity)" },
-            { "Coldgeist Bow", "(lv-16) WEAPON_Coldgeist Bow (Bow, Dexterity)" },
+            { "Colgeist Bow", "(lv-16) WEAPON_Coldgeist Bow (Bow, Dexterity)" },
             { "Serrated Longbow", "(lv-16) WEAPON_Serrated Longbow (Bow, Dexterity)" },
             { "Torrentius Longbow", "(lv-24) WEAPON_Torrentius Longbow (Bow, Dexterity)" },
 
@@ -363,9 +449,9 @@ namespace AtlyssArchipelagoWIP
             { "Wizard Hat", "(lv-1) HELM_Wizard Hat" },
             { "Acolyte Hood", "(lv-4) HELM_Acolyte Hood" },
             { "Cryptsinge Halo", "(lv-4) HELM_Cryptsinge Halo" },
-            { "Initiate Spectacles", "(lv-4) HELM_Initiate Spectacles" },
+            { "Initial Spectacles", "(lv-4) HELM_Initiate Spectacles" },
             { "Demicrypt Halo", "(lv-6) HELM_Demicrypt Halo" },
-            { "Dense Helm", "(lv-6) HELM_Dense Helm" },
+            { "Desne Helm", "(lv-6) HELM_Dense Helm" },
             { "Diva Crown", "(lv-6) HELM_Diva Crown" },
             { "Iron Halo", "(lv-6) HELM_Iron Halo" },
             { "Necromancer Hood", "(lv-8) HELM_Necromancer Hood" },
@@ -441,7 +527,7 @@ namespace AtlyssArchipelagoWIP
             { "Slimek Chest", "(lv-4) CHESTPIECE_Slimek Chest" },
             { "Dense Chestpiece", "(lv-6) CHESTPIECE_Dense Chestpiece" },
             { "Trodd Tunic", "(lv-6) CHESTPIECE_Trodd Tunic" },
-            { "Iron Chestpiece", "(lv-7) CHESTPIECE_Iron Chestpiece" },
+            { "Iron Chestplate", "(lv-7) CHESTPIECE_Iron Chestpiece" },
             { "Tattered Battlerobe", "(lv-8) CHESTPIECE_Tattered Battlerobe" },
             { "Apprentice Robe", "(lv-10) CHESTPIECE_Apprentice Robe" },
             { "Duelist Garb", "(lv-10) CHESTPIECE_Duelist Garb" },
@@ -471,25 +557,25 @@ namespace AtlyssArchipelagoWIP
             { "Sapphite Guard", "(lv-18) CHESTPIECE_Sapphite Guard" },
             { "Druidic Robe", "(lv-20) CHESTPIECE_Druidic Robe" },
             { "Emerock Chestpiece", "(lv-20) CHESTPIECE_Emerock Chestpiece" },
-            { "Fortified Vestment", "(lv-20) CHESTPIECE_Fortified Vestment" },
+            { "Fortified Chestpiece", "(lv-20) CHESTPIECE_Fortified Vestment" },
             { "Roudon Chestpiece", "(lv-20) CHESTPIECE_Roudon Chestpiece" },
             { "Earthbind Tabard", "(lv-22) CHESTPIECE_Earthbind Tabard" },
             { "Gemveil Breastplate", "(lv-22) CHESTPIECE_Gemveil Breastplate" },
             { "Roudon Robe", "(lv-22) CHESTPIECE_Roudon Robe" },
             { "Ruggrok Vest", "(lv-22) CHESTPIECE_Ruggrok Vest" },
-            { "Executioner Vestment", "(lv-24) CHESTPIECE_Executioner Vestment" },
+            { "Excecutioner Vestment", "(lv-24) CHESTPIECE_Executioner Vestment" },
             { "Fender Garb", "(lv-24) CHESTPIECE_Fender Garb" },
             { "Wizlad Robe", "(lv-24) CHESTPIECE_Wizlad Robe" },
 
             // Armor - Leggings
             { "Aero Pants", "(lv-1) LEGGINGS_Aero Pants" },
             { "Bunhost Leggings", "(lv-1) LEGGINGS_Bunhost Leggings" },
-            { "Festive Trousers", "(lv-1) LEGGINGS_Festive Trousers" },
+            { "Festive Trouser", "(lv-1) LEGGINGS_Festive Trousers" },
             { "Leather Britches", "(lv-1) LEGGINGS_Leather Britches" },
             { "Necro Caustics", "(lv-1) LEGGINGS_Necro Caustics" },
             { "Noble Pants", "(lv-1) LEGGINGS_Noble Pants" },
             { "Nutso Pants", "(lv-1) LEGGINGS_Nutso Pants" },
-            { "Orefinder Trousers", "(lv-1) LEGGINGS_Orefinder Trousers" },
+            { "Orefinder", "(lv-1) LEGGINGS_Orefinder Trousers" },
             { "Ritualist Straps", "(lv-1) LEGGINGS_Ritualist Straps" },
             { "Sagecloth Shorts", "(lv-1) LEGGINGS_Sagecloth Shorts" },
             { "Silken Loincloth", "(lv-1) LEGGINGS_Silken Loincloth" },
@@ -517,7 +603,7 @@ namespace AtlyssArchipelagoWIP
             { "Fuguefall Pants", "(lv-18) LEGGINGS_Fuguefall Pants" },
             { "Magilord Boots", "(lv-18) LEGGINGS_Magilord Boots" },
             { "Sapphite Leggings", "(lv-18) LEGGINGS_Sapphite Leggings" },
-            { "Jadewail Trousers", "(lv-20) LEGGINGS_Jadewail Trousers" },
+            { "Jadewall Trousers", "(lv-20) LEGGINGS_Jadewail Trousers" },
             { "Temrak Britches", "(lv-20) LEGGINGS_Temrak Britches" },
             { "Eschek Greaves", "(lv-22) LEGGINGS_Eschek Greaves" },
             { "Gemveil Leggings", "(lv-22) LEGGINGS_Gemveil Leggings" },
@@ -546,7 +632,7 @@ namespace AtlyssArchipelagoWIP
 
             // Accessories - Trinkets (Rings)
             { "Old Ring", "(lv-1) RING_Old Ring" },
-            { "Ring Of Ambition", "(lv-1) RING_Ring Of Ambition" },
+            { "Ring of Ambition", "(lv-1) RING_Ring Of Ambition" },
             { "Nograd's Amulet", "(lv-2) RING_Nograd's Amulet" },
             { "The One Ring", "(lv-2) RING_The One Ring" },
             { "Ambersquire Ring", "(lv-6) RING_Ambersquire Ring" },
@@ -597,9 +683,6 @@ namespace AtlyssArchipelagoWIP
             { "Maw Eye", "TRADEITEM_Maw Eye" },
             { "Mekboar Head", "TRADEITEM_Mekboar Head" },
             { "Mekboar Spear", "TRADEITEM_Mekboar Spear" },
-            { "Mekboar Nail", "TRADEITEM_Mekboar Nail" },
-            { "Mekboar Nosering", "TRADEITEM_Mekboar Nosering" },
-            { "Mekboar Spine", "TRADEITEM_Mekboar Spine" },
             { "Monolith Core", "TRADEITEM_Monolith Core" },
             { "Monolith Gem", "TRADEITEM_Monolith Gem" },
             { "Mouth Bittertooth", "TRADEITEM_Mouth Bittertooth" },
@@ -621,17 +704,10 @@ namespace AtlyssArchipelagoWIP
             { "Warboar Head", "TRADEITEM_Warboar Head" },
             { "Wizboar Head", "TRADEITEM_Wizboar Head" },
             { "Wizboar Scepter", "TRADEITEM_Wizboar Scepter" },
-            { "Geistlord Nails", "TRADEITEM_Geistlord Nails" },
 
-            // NEW: Trade Items - Ores/Ingots (non-Pack versions)
-            { "Amberite Ingot", "TRADEITEM_Amberite Ingot" },
+            // Trade Items - Ores (raw materials)
             { "Amberite Ore", "TRADEITEM_Amberite Ore" },
-            { "Dense Ingot", "TRADEITEM_Dense Ingot" },
             { "Dense Ore", "TRADEITEM_Dense Ore" },
-            { "Copper Cluster", "TRADEITEM_Copper Cluster" },
-            { "Iron Cluster", "TRADEITEM_Iron Cluster" },
-            { "Mithril Cluster", "TRADEITEM_Mithril Cluster" },
-            { "Sapphite Ingot", "TRADEITEM_Sapphite Ingot" },
             { "Sapphite Ore", "TRADEITEM_Sapphite Ore" },
             { "Coal", "TRADEITEM_Coal" },
 
@@ -645,17 +721,54 @@ namespace AtlyssArchipelagoWIP
             { "Sugshrimp", "TRADEITEM_Sugshrimp" },
             { "Windtail Fish", "TRADEITEM_Windtail Fish" },
             { "Old Boot", "TRADEITEM_Old Boot" },
-            { "Bronze Arrows", "TRADEITEM_Bronze Arrows" },
 
             // NEW: Trade Items - Special Stones/Gems
             { "Agility Stone", "TRADEITEM_Agility Stone" },
             { "Angela's Tear", "TRADEITEM_Angela's Tear" },
             { "Epic Carrot", "TRADEITEM_Epic Carrot" },
-            { "Experience Bond", "TRADEITEM_Experience Bond" },
             { "Flux Stone", "TRADEITEM_Flux Stone" },
             { "Illusion Stone", "TRADEITEM_Illusion Stone" },
             { "Might Stone", "TRADEITEM_Might Stone" },
-            { "Starlight Gem", "TRADEITEM_Starlight Gem" }
+            { "Starlight Gem", "TRADEITEM_Starlight Gem" },
+
+            // Dyes - filler items
+            { "Black Dye", "TRADEITEM_Black Dye" },
+            { "Blue Dye", "TRADEITEM_Blue Dye" },
+            { "Brown Dye", "TRADEITEM_Brown Dye" },
+            { "Cyan Dye", "TRADEITEM_Cyan Dye" },
+            { "Green Dye", "TRADEITEM_Green Dye" },
+            { "Grey Dye", "TRADEITEM_Grey Dye" },
+            { "Lime Dye", "TRADEITEM_Lime Dye" },
+            { "Orange Dye", "TRADEITEM_Orange Dye" },
+            { "Pink Dye", "TRADEITEM_Pink Dye" },
+            { "Purple Dye", "TRADEITEM_Purple Dye" },
+            { "Red Dye", "TRADEITEM_Red Dye" },
+            { "White Dye", "TRADEITEM_White Dye" },
+            { "Yellow Dye", "TRADEITEM_Yellow Dye" },
+
+            // Crowns - currency filler (given as gold directly)
+            { "Crowns (Small)", "CURRENCY_250" },
+            { "Crowns (Medium)", "CURRENCY_500" },
+            { "Crowns (Large)", "CURRENCY_1000" },
+            { "Crowns (Huge)", "CURRENCY_2500" },
+
+            // Tomes - useful items
+            { "Tome of Naivety", "(lv-0) STATUSCONSUMABLE_Tome of Naivety" },
+            { "Tome of Unlearning", "(lv-0) STATUSCONSUMABLE_Tome of Unlearning" },
+
+            // Wood-tier starter weapons
+            { "Wood Sword", "(lv-0) WEAPON_Wood Sword (Sword, Strength)" },
+            { "Wood Hammer", "(lv-0) WEAPON_Wood Hammer (Hammer, Strength)" },
+            { "Wood Spear", "(lv-0) WEAPON_Wood Spear (Spear, Strength)" },
+            { "Wood Scepter", "(lv-0) WEAPON_Wood Scepter (Scepter, Mind)" },
+            { "Wood Daggers", "(lv-0) WEAPON_Wood Daggers (Daggers, Dexterity)" },
+            { "Wooden Bell", "(lv-0) WEAPON_Wooden Bell (Bell, Mind)" },
+            { "Wooden Bow", "(lv-0) WEAPON_Wooden Bow (Bow, Dexterity)" },
+
+            // Test items - filler
+            { "Test Chestpiece", "(lv-1) CHESTPIECE_Test Chestpiece" },
+            { "Test Pants", "(lv-1) LEGGINGS_Test Pants" },
+            { "Test Ring", "(lv-1) RING_Test Ring" },
         };
     }
 }

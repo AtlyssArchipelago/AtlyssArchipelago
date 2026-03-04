@@ -176,14 +176,13 @@ namespace AtlyssArchipelagoWIP
             try
             {
                 int checkedCount = _reportedChecks.Count;
-                int totalLevelMilestones = 16;
+                int totalCount = AllLocationNameToId.Count;
                 int totalQuests = AllQuestToLocation.Count;
-                int totalCount = totalLevelMilestones + totalQuests;
-                float percentage = (float)checkedCount / totalCount * 100f;
+                float percentage = totalCount > 0 ? (float)checkedCount / totalCount * 100f : 0f;
                 SendAPChatMessage($"<color=yellow>Progress: {checkedCount}/{totalCount} ({percentage:F1}%)</color>");
                 SendAPChatMessage($"Level milestones: {_lastLevel}/32");
                 SendAPChatMessage($"Quest completions: {_completedQuests.Count}/{totalQuests}");
-                Logger.LogInfo($"[AtlyssAP] Status: {checkedCount}/{totalCount} locations ({totalQuests} quests, {totalLevelMilestones} levels)");
+                Logger.LogInfo($"[AtlyssAP] Status: {checkedCount}/{totalCount} locations checked");
             }
             catch (Exception ex)
             {

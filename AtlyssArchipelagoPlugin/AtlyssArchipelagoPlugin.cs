@@ -62,69 +62,77 @@ namespace AtlyssArchipelagoWIP
 
         private int goalOption = 3;
         public bool randomPortalsEnabled = false;
-        // CHANGED: Renamed from equipmentProgressionOption to equipmentGatingOption
-        // Now tracks Gated (1) vs Random (0) equipment placement mode.
-        // Gated mode restricts equipment tiers to appropriate-level locations during seed generation (Python-side).
-        // Random mode allows equipment to appear anywhere. Both modes are purely seed-generation logic;
-        // the C# plugin just receives and stores equipment normally regardless of this setting.
-        private int equipmentGatingOption = 0;
+        // Class options from slot data (matches Options.py: fighter=0, bandit=1, mystic=2)
+        public int mainClassOption = 0;
+        public int secondaryClassOption = 0;
         private bool shopSanityEnabled = false;
 
-        // Progressive item counters (incremented each time a progressive item is received)
+        // Progressive item counter
         private int progressivePortalCount = 0;
-        // REMOVED: progressiveEquipmentTier counter - Progressive Equipment item no longer exists.
-        // Equipment distribution is now handled by Gated/Random item_rules during Python seed generation.
-        // The C# plugin just receives equipment items normally without needing to track tiers.
 
-        // UPDATED: Expanded from 2 portals to 11 portals with dictionary tracking
+        // Portal tracking for random portal mode (all 17 portals from partner's Items.py)
         private Dictionary<string, bool> _portalItemsReceived = new Dictionary<string, bool>
         {
+            { "Sanctum Portal", false },
             { "Outer Sanctum Portal", false },
-            { "Effold Terrace Portal", false },
             { "Arcwood Pass Portal", false },
-            { "Tull Valley Portal", false },
-            { "Crescent Road Portal", false },
+            { "Effold Terrace Portal", false },
+            { "Tuul Valley Portal", false },
             { "Catacombs Portal", false },
+            { "Cresent Road Portal", false },
+            { "Tuul Enclave Portal", false },
             { "Luvora Garden Portal", false },
-            { "Crescent Keep Portal", false },
-            { "Tull Enclave Portal", false },
+            { "Cresent Keep Portal", false },
             { "Bularr Fortress Portal", false },
-            { "Grove Portal", false },
+            { "Cresent Grove lvl 1 Portal", false },
+            { "Cresent Grove lvl 2 Portal", false },
+            { "Gate of the Moon Portal", false },
+            { "Wall of the Stars Portal", false },
+            { "Redwoud Portal", false },
+            { "Trial of the Stars Portal", false },
         };
 
-        // NEW: Maps portal item names to their scene paths
+        // Maps portal item names to their scene paths (used by PortalUnlocks)
+        // TODO: Scene paths for new areas need to be confirmed with dnSpy/Unity Explorer
         private Dictionary<string, string> _portalScenes = new Dictionary<string, string>
         {
+            { "Sanctum Portal", "Assets/Scenes/00_zone_forest/_zone00_sanctum.unity" },
             { "Outer Sanctum Portal", "Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity" },
-            { "Effold Terrace Portal", "Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity" },
             { "Arcwood Pass Portal", "Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity" },
-            { "Tull Valley Portal", "Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity" },
-            { "Crescent Road Portal", "Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity" },
+            { "Effold Terrace Portal", "Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity" },
+            { "Tuul Valley Portal", "Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity" },
             { "Catacombs Portal", "Assets/Scenes/map_dungeon00_sanctumCatacombs.unity" },
+            { "Cresent Road Portal", "Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity" },
+            { "Tuul Enclave Portal", "Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity" },
             { "Luvora Garden Portal", "Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity" },
-            { "Crescent Keep Portal", "Assets/Scenes/00_zone_forest/_zone00_crescentKeep.unity" },
-            { "Tull Enclave Portal", "Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity" },
+            { "Cresent Keep Portal", "Assets/Scenes/00_zone_forest/_zone00_crescentKeep.unity" },
             { "Bularr Fortress Portal", "Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity" },
-            { "Grove Portal", "Assets/Scenes/map_dungeon01_crescentGrove.unity" },
+            { "Cresent Grove lvl 1 Portal", "Assets/Scenes/map_dungeon01_crescentGrove.unity" },
+            { "Cresent Grove lvl 2 Portal", "Assets/Scenes/map_dungeon01_crescentGrove.unity" },
+            { "Gate of the Moon Portal", "Assets/Scenes/00_zone_forest/_zone00_gateOfTheMoon.unity" },
+            { "Wall of the Stars Portal", "Assets/Scenes/00_zone_forest/_zone00_wallOfTheStars.unity" },
+            { "Redwoud Portal", "Assets/Scenes/map_zone00_redwoud.unity" },
+            { "Trial of the Stars Portal", "Assets/Scenes/00_zone_forest/_zone00_trialOfTheStars.unity" },
         };
 
-        // NEW: Progressive unlock order (matches Python regions.py)
+        // Progressive unlock order (sorted by portal_counts from partner's Locations.py)
+        // Areas with portal_count 0 are always accessible in progressive mode
         private List<string> _progressivePortalOrder = new List<string>
         {
-            "Outer Sanctum Portal",
-            "Arcwood Pass Portal",
-            "Catacombs Portal",
-            "Effold Terrace Portal",
-            "Tull Valley Portal",
-            "Crescent Road Portal",
-            "Luvora Garden Portal",
-            "Crescent Keep Portal",
-            "Tull Enclave Portal",
-            "Grove Portal",
-            "Bularr Fortress Portal",
+            "Outer Sanctum Portal",       // 1
+            "Arcwood Pass Portal",        // 2
+            "Catacombs Portal",           // 3
+            "Effold Terrace Portal",      // 4
+            "Tuul Valley Portal",         // 5
+            "Cresent Road Portal",        // 6
+            "Luvora Garden Portal",       // 7
+            "Cresent Keep Portal",        // 8
+            "Tuul Enclave Portal",        // 9
+            "Cresent Grove lvl 1 Portal", // 10 (Grove lvl 2 also needs 10)
+            "Bularr Fortress Portal",     // 11
         };
 
-        // NEW: Shop sanity system (50 locations across 10 merchants)
+        // Shop sanity system (60 locations across 12 merchants)
         public ArchipelagoShopSanity _shopSanity;
 
         private readonly HashSet<long> _reportedChecks = new HashSet<long>();
@@ -155,7 +163,7 @@ namespace AtlyssArchipelagoWIP
             cfgDeathlink = Config.Bind("Connection", "DeathLink", false,
                 "If DeathLink should be enabled (can be changed ingame).");
             Logger.LogInfo("=== [AtlyssAP] Plugin loaded! Version 1.3.1 ===");
-            Logger.LogInfo("[AtlyssAP] ALL QUESTS + Commands + Item In Spike Storage + 419 ITEMS (304 Equipment) + 50 Shop Locations!");
+            Logger.LogInfo("[AtlyssAP] ALL QUESTS + Commands + Item In Spike Storage + Progressive Equipment + 60 Shop Locations + 16 Achievements!");
             Logger.LogInfo("[AtlyssAP] Press F5 to connect to Archipelago");
 
             _harmony = new Harmony("com.azrael.atlyss.ap.harmony");
@@ -164,7 +172,7 @@ namespace AtlyssArchipelagoWIP
             DontDestroyOnLoad(scriptHolder);
             portalLocker = scriptHolder.AddComponent<PortalUnlocks>();
 
-            // NEW: Initialize shop sanity system (50 locations across 10 merchants)
+            // Initialize shop sanity system (60 locations across 12 merchants)
             _shopSanity = new ArchipelagoShopSanity(this, Logger);
 
             try

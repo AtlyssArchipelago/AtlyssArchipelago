@@ -19,10 +19,6 @@ namespace AtlyssArchipelagoWIP
 
         private List<string> lockedScenes = new List<string>();
 
-        // Portal refresh must happen on Unity's main thread. When UnblockAccessToScene
-        // is called from the AP network thread, it sets this flag. Update() picks it up.
-        private bool _pendingPortalRefresh = false;
-
         // ADDED: Reverse lookup — maps locked portal data back to original data.
         // Built once in Awake() from PortalDataToLockedData so we can restore
         // portals in real-time when they get unlocked without a scene reload.
@@ -176,6 +172,18 @@ namespace AtlyssArchipelagoWIP
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity"
                 }
             },
+            {new PortalData // The portal in Crescent Road that leads to Luvora Garden
+                {
+                    portalCaption = "Luvora Garden",
+                    spawnID = "startPoint",
+                    sceneName = "Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity"
+                },new PortalData
+                {
+                    portalCaption = "Luvora Garden (Locked!)",
+                    spawnID = "",
+                    sceneName = "Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity"
+                }
+            },
             {new PortalData // The portal in Crescent Road that leads to Crescent Keep
                 {
                     portalCaption = "Crescent Keep",
@@ -263,6 +271,18 @@ namespace AtlyssArchipelagoWIP
                     portalCaption = "Tuul Enclave (Locked!)",
                     spawnID = "",
                     sceneName = "Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity"
+                }
+            },
+            {new PortalData // The portal in Luvora Garden that leads to Crescent Road
+                {
+                    portalCaption = "Crescent Road",
+                    spawnID = "gardenPoint",
+                    sceneName = "Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity"
+                },new PortalData
+                {
+                    portalCaption = "Crescent Road (Locked!)",
+                    spawnID = "",
+                    sceneName = "Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity"
                 }
             },
             {new PortalData // The portal in Crescent Keep that leads to Crescent Road
@@ -405,18 +425,6 @@ namespace AtlyssArchipelagoWIP
             StartCoroutine(EnforcePortalLocks(s));
         }
 
-        // Processes deferred portal refreshes on the main thread.
-        // UnblockAccessToScene sets the flag from the AP network thread,
-        // and this picks it up safely where Unity API calls are allowed.
-        private void Update()
-        {
-            if (_pendingPortalRefresh)
-            {
-                _pendingPortalRefresh = false;
-                RefreshPortalsInCurrentScene();
-            }
-        }
-
         private IEnumerator EnforcePortalLocks(Scene newScene)
         {
             if (!basePlugin.connected || newScene.name == "map_dungeon00_sanctumCatacombs" || newScene.name == "map_dungeon01_crescentGrove")
@@ -539,17 +547,29 @@ namespace AtlyssArchipelagoWIP
             string mode = basePlugin.randomPortalsEnabled ? "Random Portals" : "Progressive Portals";
             StaticLogger.LogInfo($"[AtlyssAP] Portal Mode: {mode} - Locking all portals");
 
-            // Lock all 11 portal scenes (will unlock as portal items are received)
+            // Lock portal scenes that have progressive portal counts > 0
             BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_outerSanctum.unity");
             BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_effoldTerrace.unity");
             BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity");
             BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulValley.unity");
             BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentRoad.unity");
             BlockAccessToScene("Assets/Scenes/map_dungeon00_sanctumCatacombs.unity");
+            BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_luvoraGarden.unity");
             BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_crescentKeep.unity");
             BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_tuulEnclave.unity");
             BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_bularFortress.unity");
             BlockAccessToScene("Assets/Scenes/map_dungeon01_crescentGrove.unity");
+
+            // These areas have portal_count 0 in Python, meaning progressive mode
+            // doesn't gate them (quest requirements in Regions.py handle access instead).
+            // Only lock them in random portal mode where individual portal items exist.
+            if (basePlugin.randomPortalsEnabled)
+            {
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_gateOfTheMoon.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_wallOfTheStars.unity");
+                BlockAccessToScene("Assets/Scenes/map_zone00_redwoud.unity");
+                BlockAccessToScene("Assets/Scenes/00_zone_forest/_zone00_trialOfTheStars.unity");
+            }
         }
 
         public void BlockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
@@ -562,9 +582,7 @@ namespace AtlyssArchipelagoWIP
         }
 
         // UPDATED: Now calls RefreshPortalsInCurrentScene after unlocking so
-        // portals update in real-time without needing the player to leave and reload.
-        // FIXED: The refresh is deferred to Update() because this method is called
-        // from the AP network thread, and Unity objects can only be accessed on the main thread.
+        // portals update in real-time without needing the player to leave and reload
         public void UnblockAccessToScene(string sceneName) // this must be the location of the scene in the files (ex: Assets/Scenes/00_zone_forest/_zone00_arcwoodPass.unity)
         {
             if (lockedScenes.Contains(sceneName))
@@ -572,8 +590,9 @@ namespace AtlyssArchipelagoWIP
                 lockedScenes.Remove(sceneName);
                 StaticLogger.LogInfo($"[AtlyssAP] {sceneName} is no longer being locked by Archipelago");
 
-                // Queue a refresh for the main thread instead of calling directly
-                _pendingPortalRefresh = true;
+                // ADDED: Immediately refresh portals in the current scene so the
+                // player doesn't have to leave and come back to use them
+                RefreshPortalsInCurrentScene();
             }
         }
 

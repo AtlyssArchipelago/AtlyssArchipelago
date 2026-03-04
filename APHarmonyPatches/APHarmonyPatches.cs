@@ -73,7 +73,7 @@ namespace AtlyssArchipelagoWIP
     // _specialHitbox which has a FriendlyNPC_Hitbox component. When the player's
     // weapon collider enters it, FriendlyNPC_Hitbox.OnTriggerEnter fires.
     // The _achievementTag on Angela's hitbox is "ATLYSS_ACHIEVEMENT_11".
-    // We hook this to send the AP location check (ID 591500).
+    // We hook this to send the AP location check for "Rude!".
     [HarmonyPatch(typeof(FriendlyNPC_Hitbox), "OnTriggerEnter")]
     public static class AngelaRudePatch
     {
@@ -93,9 +93,9 @@ namespace AtlyssArchipelagoWIP
                     return;
 
                 StaticLogger?.LogInfo("[AtlyssAP] Angela 'Rude!' hitbox triggered!");
-                AtlyssArchipelagoPlugin.Instance.SendCheckById(591500);
+                AtlyssArchipelagoPlugin.Instance.SendCheckByName("Rude!");
                 AtlyssArchipelagoPlugin.Instance.SendAPChatMessage(
-                    "Found <color=yellow>Irritate Angela</color>!"
+                    "Found <color=yellow>Rude!</color>!"
                 );
             }
             catch (Exception ex)

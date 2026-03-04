@@ -5,8 +5,8 @@ using UnityEngine;
 
 namespace AtlyssArchipelagoWIP
 {
-    // NEW: Shop Sanity patch - Injects AP items into ALL 10 merchant shops
-    // Each merchant gets their own unique 5 AP items (50 total locations)
+    // Shop Sanity patch - Injects AP items into merchant shops
+    // Each merchant gets their own unique 5 AP items
     [HarmonyPatch(typeof(NetNPC), "Init_ShopkeepListing")]
     public static class ShopInventoryPatch
     {
@@ -25,19 +25,22 @@ namespace AtlyssArchipelagoWIP
                 // FIXED: Use GameObject name to identify which merchant this is
                 string npcName = __instance.gameObject.name;
 
-                // UPDATED: Fixed merchant names to match actual GameObject names
+                // Merchant NPC GameObjects that get AP items injected
+                // TODO: Craig, Torta/fisher, and Mad Statue NPC names need to be confirmed
                 string[] apMerchants = new string[]
                 {
-                    "_npc_Sally",                       // General merchant (early)
-                    "_npc_Skrit",                       // General merchant (early)
-                    "_npc_sallyWorker_frankie_01",      // General merchant (early)
-                    "_npc_Ruka",                        // General merchant (early)
-                    "_npc_fisher",                      // Equipment + Consumables (early) - FIXED: lowercase
-                    "_npc_dyeMerchant",                 // Consumables only (early) - FIXED: camelCase
-                    "_npc_Tesh",                        // Equipment only (early)
-                    "_npc_Nesh",                        // Equipment only (early)
-                    "_npc_Cotoo",                       // Equipment only (late game)
-                    "_npc_Rikko"                        // Equipment only (late game)
+                    "_npc_Sally",
+                    "_npc_Skrit",
+                    "_npc_sallyWorker_frankie_01",
+                    "_npc_Craig",                       // TODO: confirm NPC name
+                    "_npc_dyeMerchant",
+                    "_npc_Tesh",
+                    "_npc_Nesh",
+                    "_npc_Rikko",
+                    "_npc_Cotoo",
+                    "_npc_Ruka",
+                    "_npc_fisher",                      // TODO: confirm — might be "_npc_Torta"
+                    "_npc_madStatue",                   // TODO: confirm NPC name
                 };
 
                 bool isAPMerchant = false;
